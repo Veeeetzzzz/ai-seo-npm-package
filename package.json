@@ -1,0 +1,45 @@
+{
+  "name": "ai-seo",
+  "version": "1.0.3",
+  "description": "Minimal AI-friendly JSON-LD schema utility for SEO. Zero dependencies.",
+  "main": "index.js",
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./index.js",
+      "types": "./index.d.ts"
+    }
+  },
+  "files": [
+    "index.js",
+    "index.d.ts"
+  ],
+  "keywords": [
+    "seo",
+    "ai-seo",
+    "schema",
+    "jsonld",
+    "json-ld",
+    "llm",
+    "faq",
+    "structured-data",
+    "google",
+    "search",
+    "minimal",
+    "zero-dependencies"
+  ],
+  "author": "VX3.XYZ",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Veeeetzzzz/ai-seo-npm-package.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Veeeetzzzz/ai-seo-npm-package/issues"
+  },
+  "homepage": "https://VX3.XYZ",
+  "engines": {
+    "node": ">=14"
+  },
+  "sideEffects": false
+}
