@@ -1,4 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it } from 'node:test';
+import assert from 'node:assert';
+import './setup.js';
 import { SSR } from '../index.js';
 
 describe('SSR Utilities', () => {

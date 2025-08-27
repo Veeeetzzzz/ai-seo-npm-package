@@ -288,6 +288,19 @@ export declare const Templates: {
     conference: (eventData: any) => Record<string, any>;
     workshop: (workshopData: any) => Record<string, any>;
   };
+  jobs: {
+    jobPosting: (jobData: any) => Record<string, any>;
+    company: (companyData: any) => Record<string, any>;
+  };
+  recipe: {
+    recipe: (recipeData: any) => Record<string, any>;
+    menu: (menuData: any) => Record<string, any>;
+  };
+  media: {
+    video: (videoData: any) => Record<string, any>;
+    podcast: (episodeData: any) => Record<string, any>;
+    software: (appData: any) => Record<string, any>;
+  };
   content: {
     blogPost: (postData: any) => Record<string, any>;
     faqPage: (faqData: any) => Record<string, any>;
@@ -329,7 +342,88 @@ export declare const SSR: {
 
 // Enhanced Validation
 export declare function validateSchemaEnhanced(schema: Record<string, any>, options?: ValidationOptions): ValidationResult;
+export declare function validateSchemaRealtime(schema: Record<string, any>, options?: RealtimeValidationOptions): ValidationResult | Promise<ValidationResult>;
+export declare function analyzeSchemaQuality(schema: Record<string, any>, options?: QualityAnalysisOptions): QualityAnalysisResult;
+export declare function optimizeSchema(schema: Record<string, any>, options?: OptimizationOptions): OptimizationResult;
 export declare function getSchemaSupgestions(schemaType: string): string[];
+export declare function getSchemaSuggestions(schemaType: string): string[];
+
+export interface RealtimeValidationOptions {
+  live?: boolean;
+  callback?: (result: ValidationResult) => void;
+  debounceMs?: number;
+  includeWarnings?: boolean;
+  includeSuggestions?: boolean;
+}
+
+export interface QualityAnalysisOptions {
+  includeCompetitorAnalysis?: boolean;
+  includePerformanceMetrics?: boolean;
+  includeSEOImpact?: boolean;
+}
+
+export interface OptimizationOptions {
+  autoFix?: boolean;
+  aggressive?: boolean;
+  preserveCustom?: boolean;
+}
+
+export interface QualityAnalysisResult extends ValidationResult {
+  qualityMetrics: {
+    completeness: number;
+    seoOptimization: number;
+    technicalCorrectness: number;
+    richResultsEligibility: {
+      eligible: boolean;
+      score: number;
+      missing: string[];
+      type: string;
+    };
+  };
+  recommendations: Array<{
+    priority: 'high' | 'medium' | 'low';
+    property: string;
+    message: string;
+    example: string;
+  }>;
+  benchmarks: {
+    averageScore: number;
+    topPercentileScore: number;
+    commonIssues: string[];
+  };
+  performanceMetrics?: {
+    schemaSize: number;
+    compressionRatio: number;
+    loadImpact: string;
+  };
+  seoImpact?: {
+    richResultsScore: number;
+    searchVisibilityScore: number;
+    competitorAdvantage: any;
+  };
+}
+
+export interface OptimizationResult {
+  original: Record<string, any>;
+  optimized: Record<string, any>;
+  optimizations: Array<{
+    type: 'fix' | 'optimization' | 'enhancement';
+    property: string;
+    action: string;
+    reason: string;
+  }>;
+  qualityImprovement: {
+    scoreImprovement: number;
+    issuesFixed: number;
+    enhancementsAdded: number;
+  };
+  recommendations: Array<{
+    priority: string;
+    property: string;
+    message: string;
+    example: string;
+  }>;
+}
 
 /**
  * Initialize AI-friendly SEO schema injection with enhanced features

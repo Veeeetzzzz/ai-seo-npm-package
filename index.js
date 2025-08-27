@@ -1023,6 +1023,255 @@ export const Templates = {
   },
 
   /**
+   * Job & Career Templates
+   */
+  jobs: {
+    // Job posting
+    jobPosting: (jobData) => {
+      return createSchema('JobPosting')
+        .name(jobData.title)
+        .description(jobData.description)
+        .addProperty('datePosted', jobData.datePosted || new Date().toISOString())
+        .addProperty('validThrough', jobData.validThrough)
+        .addProperty('employmentType', jobData.employmentType || 'FULL_TIME')
+        .addProperty('hiringOrganization', {
+          '@type': 'Organization',
+          name: jobData.company,
+          sameAs: jobData.companyWebsite,
+          logo: jobData.companyLogo
+        })
+        .addProperty('jobLocation', {
+          '@type': 'Place',
+          address: {
+            '@type': 'PostalAddress',
+            streetAddress: jobData.location?.address,
+            addressLocality: jobData.location?.city,
+            addressRegion: jobData.location?.state,
+            postalCode: jobData.location?.zipCode,
+            addressCountry: jobData.location?.country || 'US'
+          }
+        })
+        .addProperty('baseSalary', jobData.salary ? {
+          '@type': 'MonetaryAmount',
+          currency: jobData.salary.currency || 'USD',
+          value: {
+            '@type': 'QuantitativeValue',
+            minValue: jobData.salary.min,
+            maxValue: jobData.salary.max,
+            unitText: jobData.salary.period || 'YEAR'
+          }
+        } : undefined)
+        .addProperty('workFromHome', jobData.remote)
+        .addProperty('qualifications', jobData.requirements)
+        .addProperty('responsibilities', jobData.responsibilities)
+        .addProperty('skills', jobData.skills)
+        .addProperty('benefits', jobData.benefits)
+        .addProperty('industry', jobData.industry)
+        .addProperty('occupationalCategory', jobData.category)
+        .build();
+    },
+
+    // Company profile
+    company: (companyData) => {
+      return organization()
+        .name(companyData.name)
+        .description(companyData.description)
+        .url(companyData.website)
+        .address(companyData.address)
+        .telephone(companyData.phone)
+        .email(companyData.email)
+        .addProperty('logo', companyData.logo)
+        .addProperty('foundingDate', companyData.founded)
+        .addProperty('numberOfEmployees', companyData.employeeCount)
+        .addProperty('industry', companyData.industry)
+        .addProperty('slogan', companyData.slogan)
+        .addProperty('awards', companyData.awards)
+        .build();
+    }
+  },
+
+  /**
+   * Recipe & Food Templates
+   */
+  recipe: {
+    // Recipe schema
+    recipe: (recipeData) => {
+      return createSchema('Recipe')
+        .name(recipeData.name)
+        .description(recipeData.description)
+        .image(recipeData.images)
+        .author(recipeData.author)
+        .datePublished(recipeData.datePublished)
+        .addProperty('recipeYield', recipeData.servings)
+        .addProperty('prepTime', recipeData.prepTime) // ISO 8601 duration
+        .addProperty('cookTime', recipeData.cookTime)
+        .addProperty('totalTime', recipeData.totalTime)
+        .addProperty('recipeCategory', recipeData.category)
+        .addProperty('recipeCuisine', recipeData.cuisine)
+        .addProperty('keywords', recipeData.keywords)
+        .addProperty('recipeIngredient', recipeData.ingredients)
+        .addProperty('recipeInstructions', recipeData.instructions?.map(step => ({
+          '@type': 'HowToStep',
+          text: step.text,
+          image: step.image,
+          name: step.name
+        })))
+        .addProperty('nutrition', recipeData.nutrition ? {
+          '@type': 'NutritionInformation',
+          calories: recipeData.nutrition.calories,
+          proteinContent: recipeData.nutrition.protein,
+          fatContent: recipeData.nutrition.fat,
+          carbohydrateContent: recipeData.nutrition.carbs,
+          fiberContent: recipeData.nutrition.fiber,
+          sugarContent: recipeData.nutrition.sugar,
+          sodiumContent: recipeData.nutrition.sodium
+        } : undefined)
+        .rating(recipeData.rating, recipeData.reviewCount)
+        .addProperty('video', recipeData.videoUrl ? {
+          '@type': 'VideoObject',
+          name: recipeData.name,
+          description: recipeData.description,
+          contentUrl: recipeData.videoUrl,
+          thumbnailUrl: recipeData.videoThumbnail
+        } : undefined)
+        .build();
+    },
+
+    // Restaurant menu
+    menu: (menuData) => {
+      const menuSections = menuData.sections?.map(section => ({
+        '@type': 'MenuSection',
+        name: section.name,
+        description: section.description,
+        hasMenuItem: section.items?.map(item => ({
+          '@type': 'MenuItem',
+          name: item.name,
+          description: item.description,
+          offers: {
+            '@type': 'Offer',
+            price: item.price,
+            priceCurrency: item.currency || 'USD'
+          },
+          nutrition: item.nutrition,
+          suitableForDiet: item.dietaryRestrictions
+        }))
+      }));
+
+      return createSchema('Menu')
+        .name(menuData.name)
+        .description(menuData.description)
+        .addProperty('hasMenuSection', menuSections)
+        .addProperty('provider', {
+          '@type': 'Restaurant',
+          name: menuData.restaurant
+        })
+        .build();
+    }
+  },
+
+  /**
+   * Media & Content Templates
+   */
+  media: {
+    // Video content
+    video: (videoData) => {
+      return createSchema('VideoObject')
+        .name(videoData.title)
+        .description(videoData.description)
+        .addProperty('contentUrl', videoData.videoUrl)
+        .addProperty('embedUrl', videoData.embedUrl)
+        .addProperty('thumbnailUrl', videoData.thumbnail)
+        .addProperty('uploadDate', videoData.uploadDate)
+        .addProperty('duration', videoData.duration) // ISO 8601 duration
+        .addProperty('contentRating', videoData.rating)
+        .addProperty('genre', videoData.genre)
+        .addProperty('keywords', videoData.tags)
+        .addProperty('creator', {
+          '@type': 'Person',
+          name: videoData.creator,
+          url: videoData.creatorUrl
+        })
+        .addProperty('publisher', {
+          '@type': 'Organization',
+          name: videoData.publisher,
+          logo: videoData.publisherLogo
+        })
+        .addProperty('interactionStatistic', [
+          {
+            '@type': 'InteractionCounter',
+            interactionType: 'https://schema.org/WatchAction',
+            userInteractionCount: videoData.viewCount
+          },
+          {
+            '@type': 'InteractionCounter', 
+            interactionType: 'https://schema.org/LikeAction',
+            userInteractionCount: videoData.likeCount
+          }
+        ])
+        .build();
+    },
+
+    // Podcast episode
+    podcast: (episodeData) => {
+      return createSchema('PodcastEpisode')
+        .name(episodeData.title)
+        .description(episodeData.description)
+        .url(episodeData.url)
+        .addProperty('episodeNumber', episodeData.episodeNumber)
+        .addProperty('seasonNumber', episodeData.seasonNumber)
+        .addProperty('datePublished', episodeData.publishDate)
+        .addProperty('duration', episodeData.duration)
+        .addProperty('associatedMedia', {
+          '@type': 'MediaObject',
+          contentUrl: episodeData.audioUrl,
+          encodingFormat: episodeData.audioFormat || 'audio/mpeg'
+        })
+        .addProperty('partOfSeries', {
+          '@type': 'PodcastSeries',
+          name: episodeData.podcastName,
+          url: episodeData.podcastUrl
+        })
+        .addProperty('creator', episodeData.hosts?.map(host => ({
+          '@type': 'Person',
+          name: host.name,
+          url: host.url
+        })))
+        .addProperty('keywords', episodeData.tags)
+        .build();
+    },
+
+    // Software application
+    software: (appData) => {
+      return createSchema('SoftwareApplication')
+        .name(appData.name)
+        .description(appData.description)
+        .url(appData.website)
+        .image(appData.screenshots)
+        .addProperty('applicationCategory', appData.category)
+        .addProperty('applicationSubCategory', appData.subcategory)
+        .addProperty('operatingSystem', appData.operatingSystems)
+        .addProperty('softwareVersion', appData.version)
+        .addProperty('datePublished', appData.releaseDate)
+        .addProperty('fileSize', appData.fileSize)
+        .addProperty('downloadUrl', appData.downloadUrl)
+        .addProperty('installUrl', appData.installUrl)
+        .rating(appData.rating, appData.reviewCount)
+        .offers({
+          price: appData.price || 0,
+          priceCurrency: appData.currency || 'USD'
+        })
+        .addProperty('author', {
+          '@type': 'Organization',
+          name: appData.developer,
+          url: appData.developerUrl
+        })
+        .addProperty('permissions', appData.permissions)
+        .addProperty('requirements', appData.systemRequirements)
+        .build();
+    }
+  },
+
+  /**
    * Blog & Content Templates
    */
   content: {
@@ -1259,6 +1508,218 @@ function validateSchema(schema) {
   return { valid: true };
 }
 
+// Real-time validation API for browser environments
+export function validateSchemaRealtime(schema, options = {}) {
+  const { 
+    live = true, 
+    callback = null, 
+    debounceMs = 300,
+    includeSuggestions = true 
+  } = options;
+  
+  if (!isBrowserEnvironment()) {
+    return validateSchemaEnhanced(schema, options);
+  }
+  
+  let validationTimeout;
+  
+  const performValidation = () => {
+    const result = validateSchemaEnhanced(schema, {
+      strict: true,
+      suggestions: includeSuggestions
+    });
+    
+    // Add real-time specific enhancements
+    result.timestamp = new Date().toISOString();
+    result.validationType = 'realtime';
+    result.browserContext = {
+      userAgent: navigator.userAgent.substring(0, 100),
+      url: window.location.href,
+      timestamp: Date.now()
+    };
+    
+    // Performance measurement
+    const startTime = performance.now();
+    const endTime = performance.now();
+    result.validationTime = endTime - startTime;
+    
+    // Trigger callback if provided
+    if (callback && typeof callback === 'function') {
+      callback(result);
+    }
+    
+    // Fire custom event for other listeners
+    if (window.dispatchEvent) {
+      const event = new CustomEvent('ai-seo-validation', {
+        detail: { schema, result }
+      });
+      window.dispatchEvent(event);
+    }
+    
+    return result;
+  };
+  
+  if (live && debounceMs > 0) {
+    // Debounced real-time validation
+    return new Promise((resolve) => {
+      clearTimeout(validationTimeout);
+      validationTimeout = setTimeout(() => {
+        resolve(performValidation());
+      }, debounceMs);
+    });
+  }
+  
+  return performValidation();
+}
+
+// Schema quality analyzer with actionable insights
+export function analyzeSchemaQuality(schema, options = {}) {
+  const { 
+    includeCompetitorAnalysis = false,
+    includePerformanceMetrics = true,
+    includeSEOImpact = true 
+  } = options;
+  
+  const validation = validateSchemaEnhanced(schema, { strict: true, suggestions: true });
+  const analysis = {
+    ...validation,
+    qualityMetrics: {
+      completeness: calculateSchemaCompleteness(schema),
+      seoOptimization: calculateSEOOptimization(schema),
+      technicalCorrectness: validation.score,
+      richResultsEligibility: assessRichResultsEligibility(schema)
+    },
+    recommendations: generateActionableRecommendations(schema, validation),
+    benchmarks: generateSchemaBenchmarks(schema)
+  };
+  
+  if (includePerformanceMetrics && isBrowserEnvironment()) {
+    analysis.performanceMetrics = {
+      schemaSize: JSON.stringify(schema).length,
+      compressionRatio: estimateCompressionRatio(schema),
+      loadImpact: estimateLoadImpact(schema)
+    };
+  }
+  
+  if (includeSEOImpact) {
+    analysis.seoImpact = {
+      richResultsScore: calculateRichResultsScore(schema),
+      searchVisibilityScore: calculateSearchVisibilityScore(schema),
+      competitorAdvantage: includeCompetitorAnalysis ? analyzeCompetitorAdvantage(schema) : null
+    };
+  }
+  
+  return analysis;
+}
+
+// Schema optimization suggestions with auto-fix capabilities
+export function optimizeSchema(schema, options = {}) {
+  const { autoFix = false, aggressive = false } = options;
+  
+  const analysis = analyzeSchemaQuality(schema);
+  const optimizations = [];
+  const optimizedSchema = { ...schema };
+  
+  // Auto-fix common issues
+  if (autoFix) {
+    // Fix missing required properties
+    if (!optimizedSchema['@context']) {
+      optimizedSchema['@context'] = 'https://schema.org';
+      optimizations.push({
+        type: 'fix',
+        property: '@context',
+        action: 'added',
+        reason: 'Required property was missing'
+      });
+    }
+    
+    // Optimize image arrays
+    if (optimizedSchema.image && Array.isArray(optimizedSchema.image)) {
+      // Remove duplicates
+      const uniqueImages = [...new Set(optimizedSchema.image)];
+      if (uniqueImages.length !== optimizedSchema.image.length) {
+        optimizedSchema.image = uniqueImages;
+        optimizations.push({
+          type: 'optimization',
+          property: 'image',
+          action: 'deduplicated',
+          reason: 'Removed duplicate images'
+        });
+      }
+    }
+    
+    // Fix date formats
+    ['datePublished', 'dateModified', 'startDate', 'endDate'].forEach(dateField => {
+      if (optimizedSchema[dateField] && typeof optimizedSchema[dateField] === 'string') {
+        const date = new Date(optimizedSchema[dateField]);
+        if (!isNaN(date.getTime())) {
+          const isoDate = date.toISOString();
+          if (optimizedSchema[dateField] !== isoDate) {
+            optimizedSchema[dateField] = isoDate;
+            optimizations.push({
+              type: 'fix',
+              property: dateField,
+              action: 'formatted',
+              reason: 'Converted to ISO 8601 format'
+            });
+          }
+        }
+      }
+    });
+    
+    // Add missing structured data enhancements
+    if (aggressive) {
+      // Add publisher for articles if missing
+      if (optimizedSchema['@type'] === 'Article' && !optimizedSchema.publisher) {
+        if (isBrowserEnvironment()) {
+          optimizedSchema.publisher = {
+            '@type': 'Organization',
+            name: document.title || 'Website',
+            url: window.location.origin
+          };
+          optimizations.push({
+            type: 'enhancement',
+            property: 'publisher',
+            action: 'inferred',
+            reason: 'Added publisher from page context'
+          });
+        }
+      }
+      
+      // Add breadcrumb context for products
+      if (optimizedSchema['@type'] === 'Product' && !optimizedSchema.category) {
+        // Try to infer from page URL or content
+        if (isBrowserEnvironment()) {
+          const pathSegments = window.location.pathname.split('/').filter(Boolean);
+          if (pathSegments.length > 1) {
+            optimizedSchema.category = pathSegments[pathSegments.length - 2];
+            optimizations.push({
+              type: 'enhancement',
+              property: 'category',
+              action: 'inferred',
+              reason: 'Inferred category from URL structure'
+            });
+          }
+        }
+      }
+    }
+  }
+  
+  return {
+    original: schema,
+    optimized: optimizedSchema,
+    optimizations,
+    qualityImprovement: {
+      scoreImprovement: calculateSchemaScore(optimizedSchema, [], []) - analysis.score,
+      issuesFixed: optimizations.filter(opt => opt.type === 'fix').length,
+      enhancementsAdded: optimizations.filter(opt => opt.type === 'enhancement').length
+    },
+    recommendations: analysis.recommendations.filter(rec => 
+      !optimizations.some(opt => opt.property === rec.property)
+    )
+  };
+}
+
 // Enhanced schema validation with detailed feedback
 export function validateSchemaEnhanced(schema, options = {}) {
   const { strict = false, suggestions = true } = options;
@@ -1356,6 +1817,24 @@ export function validateSchemaEnhanced(schema, options = {}) {
     }
     if (!schema.location) {
       warnings.push('Event schema should include location information');
+    }
+  }
+
+  if (schemaType === 'JobPosting') {
+    if (!schema.name && !schema.title) {
+      errors.push('JobPosting schema missing required "title" property');
+    }
+    if (!schema.description) {
+      errors.push('JobPosting schema missing required "description" property');
+    }
+    if (!schema.hiringOrganization) {
+      errors.push('JobPosting schema missing required "hiringOrganization" property');
+      if (suggestions) {
+        tips.push('Add hiringOrganization: { "@type": "Organization", "name": "Company Name" }');
+      }
+    }
+    if (!schema.jobLocation) {
+      warnings.push('JobPosting schema should include jobLocation information');
     }
   }
 
@@ -1469,6 +1948,199 @@ function calculateSchemaScore(schema, errors, warnings) {
   return Math.max(0, Math.min(100, score));
 }
 
+// Helper functions for advanced validation features
+function calculateSchemaCompleteness(schema) {
+  const schemaType = schema['@type'];
+  const requiredFields = getRequiredFieldsForType(schemaType);
+  const recommendedFields = getRecommendedFieldsForType(schemaType);
+  
+  let score = 0;
+  
+  requiredFields.forEach(field => {
+    if (schema[field]) score += 2; // Required fields worth more
+  });
+  
+  recommendedFields.forEach(field => {
+    if (schema[field]) score += 1;
+  });
+  
+  return Math.min(100, (score / (requiredFields.length * 2 + recommendedFields.length)) * 100);
+}
+
+function calculateSEOOptimization(schema) {
+  let score = 0;
+  let maxScore = 0;
+  
+  // Check for SEO-critical properties
+  const seoProperties = [
+    'name', 'description', 'image', 'url', 
+    'datePublished', 'author', 'publisher'
+  ];
+  
+  seoProperties.forEach(prop => {
+    maxScore += 10;
+    if (schema[prop]) {
+      score += 10;
+      // Bonus for quality content
+      if (typeof schema[prop] === 'string' && schema[prop].length > 20) {
+        score += 5;
+        maxScore += 5;
+      }
+    }
+  });
+  
+  return Math.min(100, (score / maxScore) * 100);
+}
+
+function assessRichResultsEligibility(schema) {
+  const type = schema['@type'];
+  const eligibilityChecks = {
+    'Product': ['name', 'image', 'offers'],
+    'Article': ['headline', 'image', 'author', 'datePublished'],
+    'Recipe': ['name', 'image', 'author', 'datePublished'],
+    'Event': ['name', 'startDate', 'location'],
+    'JobPosting': ['title', 'description', 'hiringOrganization', 'jobLocation'],
+    'LocalBusiness': ['name', 'address', 'telephone']
+  };
+  
+  const required = eligibilityChecks[type] || [];
+  const present = required.filter(field => schema[field]);
+  
+  return {
+    eligible: present.length >= required.length * 0.8, // 80% threshold
+    score: (present.length / required.length) * 100,
+    missing: required.filter(field => !schema[field]),
+    type
+  };
+}
+
+function generateActionableRecommendations(schema) {
+  const recommendations = [];
+  const type = schema['@type'];
+  
+  // Type-specific recommendations
+  if (type === 'Product' && !schema.offers) {
+    recommendations.push({
+      priority: 'high',
+      property: 'offers',
+      message: 'Add pricing information to improve product rich results',
+      example: 'offers: { price: "99.99", priceCurrency: "USD" }'
+    });
+  }
+  
+  if (type === 'Article' && !schema.author) {
+    recommendations.push({
+      priority: 'medium',
+      property: 'author',
+      message: 'Add author information for better article credibility',
+      example: 'author: { "@type": "Person", "name": "Author Name" }'
+    });
+  }
+  
+  if (!schema.image) {
+    recommendations.push({
+      priority: 'medium',
+      property: 'image',
+      message: 'Add images to improve visual appeal in search results',
+      example: 'image: ["image1.jpg", "image2.jpg"]'
+    });
+  }
+  
+  return recommendations;
+}
+
+function generateSchemaBenchmarks(schema) {
+  const type = schema['@type'];
+  
+  // Industry benchmarks (simplified for demo)
+  const benchmarks = {
+    'Product': {
+      averageScore: 75,
+      topPercentileScore: 90,
+      commonIssues: ['Missing brand', 'No reviews', 'Incomplete offers']
+    },
+    'Article': {
+      averageScore: 80,
+      topPercentileScore: 95,
+      commonIssues: ['Missing publisher', 'No publication date', 'Missing author']
+    },
+    'LocalBusiness': {
+      averageScore: 70,
+      topPercentileScore: 85,
+      commonIssues: ['Missing hours', 'No address', 'Missing contact info']
+    }
+  };
+  
+  return benchmarks[type] || {
+    averageScore: 75,
+    topPercentileScore: 90,
+    commonIssues: ['Incomplete required fields']
+  };
+}
+
+function calculateRichResultsScore(schema) {
+  const eligibility = assessRichResultsEligibility(schema);
+  return eligibility.score;
+}
+
+function calculateSearchVisibilityScore(schema) {
+  let score = calculateSEOOptimization(schema);
+  
+  // Bonus for structured data best practices
+  if (schema['@context'] === 'https://schema.org') score += 5;
+  if (schema.url && schema.url.startsWith('https://')) score += 5;
+  if (schema.dateModified) score += 3;
+  
+  return Math.min(100, score);
+}
+
+function analyzeCompetitorAdvantage() {
+  // Simplified competitor analysis (would typically involve external data)
+  return {
+    advantages: ['Structured data present', 'Rich results eligible'],
+    disadvantages: ['Could improve completeness score'],
+    opportunities: ['Add more detailed properties', 'Include reviews/ratings']
+  };
+}
+
+function estimateCompressionRatio(schema) {
+  const jsonString = JSON.stringify(schema);
+  // Simulate gzip compression ratio
+  return Math.round((jsonString.length * 0.3) / jsonString.length * 100) / 100;
+}
+
+function estimateLoadImpact(schema) {
+  const size = JSON.stringify(schema).length;
+  if (size < 1000) return 'minimal';
+  if (size < 5000) return 'low';
+  if (size < 10000) return 'moderate';
+  return 'high';
+}
+
+function getRequiredFieldsForType(type) {
+  const required = {
+    'Product': ['name'],
+    'Article': ['headline', 'author'],
+    'Event': ['name', 'startDate'],
+    'JobPosting': ['title', 'description', 'hiringOrganization'],
+    'LocalBusiness': ['name', 'address'],
+    'Recipe': ['name', 'recipeIngredient', 'recipeInstructions']
+  };
+  return required[type] || ['name'];
+}
+
+function getRecommendedFieldsForType(type) {
+  const recommended = {
+    'Product': ['description', 'image', 'brand', 'offers', 'aggregateRating'],
+    'Article': ['image', 'datePublished', 'publisher', 'description'],
+    'Event': ['description', 'location', 'offers', 'organizer'],
+    'JobPosting': ['datePosted', 'employmentType', 'jobLocation', 'baseSalary'],
+    'LocalBusiness': ['telephone', 'url', 'openingHours', 'priceRange'],
+    'Recipe': ['image', 'author', 'datePublished', 'prepTime', 'cookTime', 'recipeYield']
+  };
+  return recommended[type] || ['description', 'image', 'url'];
+}
+
 // Schema suggestions based on type
 export function getSchemaSupgestions(schemaType) {
   const suggestions = {
@@ -1508,6 +2180,11 @@ export function getSchemaSupgestions(schemaType) {
     'Include relevant images',
     'Add appropriate URLs'
   ];
+}
+
+// Correctly-spelled alias; keep both exports for backward compatibility
+export function getSchemaSuggestions(schemaType) {
+  return getSchemaSupgestions(schemaType);
 }
 
 // Analytics and Performance Tracking

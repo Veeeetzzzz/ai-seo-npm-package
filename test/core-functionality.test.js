@@ -1,4 +1,7 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, beforeEach } from 'node:test';
+import assert from 'node:assert';
+import './setup.js';
+import { cleanupDOM } from './setup.js';
 import { 
   initSEO, 
   addFAQ, 
@@ -12,6 +15,7 @@ import {
 describe('Core Functionality', () => {
   beforeEach(() => {
     // Clear any existing schemas
+    cleanupDOM();
     removeAllSchemas();
   });
 
@@ -22,13 +26,13 @@ describe('Core Functionality', () => {
         answerType: 'This is a test'
       });
 
-      expect(result).toBeInstanceOf(HTMLScriptElement);
-      expect(result.type).toBe('application/ld+json');
-      expect(result.getAttribute('data-ai-seo')).toBe('true');
+      assert.ok(result instanceof HTMLScriptElement);
+      assert.strictEqual(result.type, 'application/ld+json');
+      assert.strictEqual(result.getAttribute('data-ai-seo'), 'true');
       
       const schema = JSON.parse(result.textContent);
-      expect(schema['@type']).toBe('FAQPage');
-      expect(schema.mainEntity[0].name).toBe('What is this?');
+      assert.strictEqual(schema['@type'], 'FAQPage');
+      assert.strictEqual(schema.mainEntity[0].name, 'What is this?');
     });
 
     it('should inject a custom schema', () => {

@@ -1,19 +1,18 @@
-// Test setup for Vitest
-import { beforeEach, afterEach } from 'vitest';
+// Test setup for Node.js test runner
+import { Window } from 'happy-dom';
 
-// Mock browser environment
-global.document = global.window.document;
-global.HTMLScriptElement = global.window.HTMLScriptElement;
-
-// Clean up DOM between tests
-beforeEach(() => {
-  // Clear any existing schemas
-  const existingSchemas = document.querySelectorAll('script[data-ai-seo]');
-  existingSchemas.forEach(el => el.remove());
+// Setup DOM environment
+const window = new Window();
+global.window = window;
+global.document = window.document;
+global.HTMLScriptElement = window.HTMLScriptElement;
+Object.defineProperty(global, 'navigator', {
+  value: window.navigator,
+  writable: true
 });
 
-afterEach(() => {
-  // Clean up after each test
+// Clean up function for tests
+export function cleanupDOM() {
   const existingSchemas = document.querySelectorAll('script[data-ai-seo]');
   existingSchemas.forEach(el => el.remove());
-}); 
+} 
