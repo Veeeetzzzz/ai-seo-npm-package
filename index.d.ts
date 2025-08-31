@@ -316,6 +316,82 @@ export declare const Analytics: {
   exportAnalytics: (format?: 'json' | 'csv') => string | null;
 };
 
+// Cache System (v1.5.0)
+export interface CacheConfig {
+  strategy?: 'none' | 'basic' | 'intelligent';
+  ttl?: number;
+  maxSize?: number;
+  enableCompression?: boolean;
+  enableMetrics?: boolean;
+}
+
+export interface CacheMetrics {
+  hits: number;
+  misses: number;
+  hitRate: number;
+  compressionSavings: number;
+  averageAccessTime: number;
+  cacheSize: number;
+  maxSize: number;
+  strategy: string;
+  totalEntries: number;
+}
+
+export declare const Cache: {
+  configure: (options: CacheConfig) => void;
+  clear: () => void;
+  getMetrics: () => CacheMetrics;
+  getInstance: () => any;
+};
+
+// Lazy Loading System (v1.5.0)
+export interface LazySchemaConfig {
+  rootMargin?: string;
+  threshold?: number;
+  debug?: boolean;
+}
+
+export declare class LazySchema {
+  constructor(type?: string);
+  loadWhen(condition: 'immediate' | 'visible' | 'interaction' | 'custom', customFn?: () => boolean): LazySchema;
+  withData(dataFn: () => Record<string, any>): LazySchema;
+  configure(options: LazySchemaConfig): LazySchema;
+  inject(options?: LazySchemaConfig): HTMLElement | null;
+  cleanup(): void;
+}
+
+// Performance Monitoring (v1.5.0)
+export interface PerformanceMetrics {
+  schemaInjections: Array<{
+    duration: number;
+    fromCache: boolean;
+    schemaType: string;
+    timestamp: number;
+  }>;
+  averageInjectionTime: number;
+  cacheHitRate: number;
+  totalSchemas: number;
+  performanceScore: number;
+}
+
+export interface PerformanceRecommendation {
+  type: 'performance' | 'caching' | 'optimization' | 'success';
+  severity: 'info' | 'low' | 'medium' | 'high';
+  message: string;
+  action: string;
+}
+
+export interface PerformanceReport extends PerformanceMetrics {
+  recommendations: PerformanceRecommendation[];
+  timestamp: string;
+}
+
+export declare const Performance: {
+  recordInjection: (duration: number, fromCache?: boolean, schemaType?: string) => void;
+  getReport: () => PerformanceReport;
+  clear: () => void;
+};
+
 // Schema Helpers
 export declare const SchemaHelpers: {
   createProduct(options?: ProductSchemaOptions): Record<string, any>;

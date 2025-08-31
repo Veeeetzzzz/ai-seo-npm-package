@@ -3,6 +3,550 @@
 // Global registry to track injected schemas
 const schemaRegistry = new Map();
 
+// Advanced Caching System for v1.5.0
+class SchemaCache {
+  constructor() {
+    this.cache = new Map();
+    this.config = {
+      strategy: 'intelligent', // 'none', 'basic', 'intelligent'
+      ttl: 3600000, // 1 hour default
+      maxSize: 50,
+      enableCompression: true,
+      enableMetrics: true
+    };
+    this.metrics = {
+      hits: 0,
+      misses: 0,
+      compressionSavings: 0,
+      averageAccessTime: 0
+    };
+    this.accessTimes = [];
+  }
+
+  configure(options = {}) {
+    this.config = { ...this.config, ...options };
+    
+    // Clear cache if strategy changed to 'none'
+    if (this.config.strategy === 'none') {
+      this.clear();
+    }
+    
+    // Enforce max size
+    if (this.cache.size > this.config.maxSize) {
+      this._enforceMaxSize();
+    }
+  }
+
+  _generateKey(schema, options = {}) {
+    // Create a stable cache key based on schema content and options
+    const keyData = {
+      type: schema['@type'],
+      content: JSON.stringify(schema),
+      options: JSON.stringify(options)
+    };
+    
+    // Simple hash function for cache key
+    return this._hash(JSON.stringify(keyData));
+  }
+
+  _hash(str) {
+    let hash = 0;
+    if (str.length === 0) return hash.toString();
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32-bit integer
+    }
+    return Math.abs(hash).toString(36);
+  }
+
+  _compress(data) {
+    if (!this.config.enableCompression) return data;
+    
+    // Simple compression simulation (in real implementation, use actual compression)
+    const original = JSON.stringify(data);
+    const compressed = original.replace(/\s+/g, ' ').trim();
+    
+    if (this.config.enableMetrics) {
+      this.metrics.compressionSavings += (original.length - compressed.length);
+    }
+    
+    return compressed;
+  }
+
+  _decompress(data) {
+    if (!this.config.enableCompression) return data;
+    return typeof data === 'string' ? JSON.parse(data) : data;
+  }
+
+  _enforceMaxSize() {
+    if (this.cache.size <= this.config.maxSize) return;
+    
+    // LRU eviction: remove oldest entries
+    const entries = Array.from(this.cache.entries());
+    entries.sort((a, b) => a[1].lastAccessed - b[1].lastAccessed);
+    
+    const toRemove = entries.slice(0, this.cache.size - this.config.maxSize);
+    toRemove.forEach(([key]) => this.cache.delete(key));
+  }
+
+  _isExpired(entry) {
+    if (!this.config.ttl) return false;
+    return Date.now() - entry.timestamp > this.config.ttl;
+  }
+
+  _recordAccess(hit = true) {
+    const accessTime = performance.now();
+    this.accessTimes.push(accessTime);
+    
+    if (this.config.enableMetrics) {
+      if (hit) {
+        this.metrics.hits++;
+      } else {
+        this.metrics.misses++;
+      }
+      
+      // Keep only last 100 access times for average calculation
+      if (this.accessTimes.length > 100) {
+        this.accessTimes = this.accessTimes.slice(-100);
+      }
+      
+      this.metrics.averageAccessTime = this.accessTimes.reduce((a, b) => a + b, 0) / this.accessTimes.length;
+    }
+  }
+
+  get(schema, options = {}) {
+    if (this.config.strategy === 'none') return null;
+    
+    const key = this._generateKey(schema, options);
+    const entry = this.cache.get(key);
+    
+    if (!entry || this._isExpired(entry)) {
+      this._recordAccess(false);
+      if (entry) this.cache.delete(key); // Remove expired entry
+      return null;
+    }
+    
+    // Update last accessed time
+    entry.lastAccessed = Date.now();
+    this.cache.set(key, entry);
+    
+    this._recordAccess(true);
+    return this._decompress(entry.data);
+  }
+
+  set(schema, options = {}, result) {
+    if (this.config.strategy === 'none') return false;
+    
+    const key = this._generateKey(schema, options);
+    const compressedData = this._compress(result);
+    
+    const entry = {
+      data: compressedData,
+      timestamp: Date.now(),
+      lastAccessed: Date.now(),
+      schemaType: schema['@type'],
+      size: JSON.stringify(result).length
+    };
+    
+    this.cache.set(key, entry);
+    this._enforceMaxSize();
+    
+    return true;
+  }
+
+  clear() {
+    this.cache.clear();
+    this.metrics = {
+      hits: 0,
+      misses: 0,
+      compressionSavings: 0,
+      averageAccessTime: 0
+    };
+    this.accessTimes = [];
+  }
+
+  getMetrics() {
+    const hitRate = this.metrics.hits + this.metrics.misses > 0 
+      ? (this.metrics.hits / (this.metrics.hits + this.metrics.misses)) * 100 
+      : 0;
+    
+    return {
+      ...this.metrics,
+      hitRate: Math.round(hitRate * 100) / 100,
+      cacheSize: this.cache.size,
+      maxSize: this.config.maxSize,
+      strategy: this.config.strategy,
+      totalEntries: this.metrics.hits + this.metrics.misses
+    };
+  }
+
+  // Intelligent caching strategies
+  shouldCache(schema) {
+    if (this.config.strategy === 'none') return false;
+    if (this.config.strategy === 'basic') return true;
+    
+    // Intelligent strategy: cache based on schema complexity and reuse patterns
+    if (this.config.strategy === 'intelligent') {
+      const schemaSize = JSON.stringify(schema).length;
+      const isComplex = schemaSize > 500; // Cache complex schemas
+      const hasMultipleProperties = Object.keys(schema).length > 5;
+      const isReusableType = ['Product', 'Article', 'LocalBusiness', 'Event'].includes(schema['@type']);
+      
+      return isComplex || hasMultipleProperties || isReusableType;
+    }
+    
+    return true;
+  }
+}
+
+// Global cache instance
+const globalSchemaCache = new SchemaCache();
+
+// Cache configuration API
+export const Cache = {
+  configure: (options) => globalSchemaCache.configure(options),
+  clear: () => globalSchemaCache.clear(),
+  getMetrics: () => globalSchemaCache.getMetrics(),
+  getInstance: () => globalSchemaCache
+};
+
+// Lazy Schema Loading System for v1.5.0
+export class LazySchema {
+  constructor(type = 'Thing') {
+    this.schemaType = type;
+    this.loadCondition = 'immediate'; // 'immediate', 'visible', 'interaction', 'custom'
+    this.dataProvider = null;
+    this.element = null;
+    this.observer = null;
+    this.loaded = false;
+    this.config = {
+      rootMargin: '50px',
+      threshold: 0.1,
+      debug: false
+    };
+  }
+
+  // Configure when to load the schema
+  loadWhen(condition, customFn = null) {
+    this.loadCondition = condition;
+    if (condition === 'custom' && typeof customFn === 'function') {
+      this.customCondition = customFn;
+    }
+    return this;
+  }
+
+  // Set data provider function
+  withData(dataFn) {
+    if (typeof dataFn === 'function') {
+      this.dataProvider = dataFn;
+    }
+    return this;
+  }
+
+  // Configure lazy loading options
+  configure(options = {}) {
+    this.config = { ...this.config, ...options };
+    return this;
+  }
+
+  // Create placeholder element for visibility tracking
+  _createPlaceholder() {
+    if (!isBrowserEnvironment()) return null;
+    
+    const placeholder = document.createElement('div');
+    placeholder.setAttribute('data-lazy-schema', 'true');
+    placeholder.setAttribute('data-schema-type', this.schemaType);
+    placeholder.style.height = '1px';
+    placeholder.style.width = '1px';
+    placeholder.style.position = 'absolute';
+    placeholder.style.top = '0';
+    placeholder.style.left = '0';
+    placeholder.style.pointerEvents = 'none';
+    placeholder.style.opacity = '0';
+    
+    return placeholder;
+  }
+
+  // Load schema immediately
+  _loadImmediate() {
+    return this._executeLoad();
+  }
+
+  // Setup visibility observer
+  _setupVisibilityObserver() {
+    if (!isBrowserEnvironment() || !window.IntersectionObserver) {
+      // Fallback to immediate loading if IntersectionObserver not available
+      return this._loadImmediate();
+    }
+
+    this.element = this._createPlaceholder();
+    if (!this.element) return null;
+
+    document.body.appendChild(this.element);
+
+    this.observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting && !this.loaded) {
+          this._executeLoad();
+          this.observer.disconnect();
+          this.element.remove();
+        }
+      });
+    }, {
+      rootMargin: this.config.rootMargin,
+      threshold: this.config.threshold
+    });
+
+    this.observer.observe(this.element);
+    return this.element;
+  }
+
+  // Setup interaction observer
+  _setupInteractionObserver() {
+    if (!isBrowserEnvironment()) {
+      return this._loadImmediate();
+    }
+
+    const events = ['click', 'scroll', 'keydown', 'touchstart'];
+    const loadOnInteraction = () => {
+      if (!this.loaded) {
+        this._executeLoad();
+        events.forEach(event => {
+          document.removeEventListener(event, loadOnInteraction, { passive: true });
+        });
+      }
+    };
+
+    events.forEach(event => {
+      document.addEventListener(event, loadOnInteraction, { passive: true });
+    });
+
+    return { type: 'interaction-listener', events };
+  }
+
+  // Execute the actual schema loading
+  _executeLoad() {
+    if (this.loaded) return null;
+
+    try {
+      const data = this.dataProvider ? this.dataProvider() : {};
+      const schema = this._buildSchema(data);
+      
+      const result = initSEO({ 
+        schema, 
+        debug: this.config.debug,
+        id: `lazy-${this.schemaType.toLowerCase()}-${Date.now()}`
+      });
+      
+      this.loaded = true;
+      
+      if (this.config.debug) {
+        console.log(`[ai-seo] Lazy loaded ${this.schemaType} schema`);
+      }
+      
+      return result;
+    } catch (error) {
+      console.error('[ai-seo] Error in lazy schema loading:', error);
+      return null;
+    }
+  }
+
+  // Build schema from data
+  _buildSchema(data) {
+    const baseSchema = {
+      "@context": "https://schema.org",
+      "@type": this.schemaType
+    };
+
+    // Merge with provided data
+    return { ...baseSchema, ...data };
+  }
+
+  // Custom condition checking
+  _checkCustomCondition() {
+    if (typeof this.customCondition === 'function') {
+      try {
+        return this.customCondition();
+      } catch (error) {
+        console.error('[ai-seo] Error in custom condition:', error);
+        return true; // Fallback to loading
+      }
+    }
+    return true;
+  }
+
+  // Main injection method
+  inject(options = {}) {
+    this.config = { ...this.config, ...options };
+
+    switch (this.loadCondition) {
+      case 'immediate':
+        return this._loadImmediate();
+      
+      case 'visible':
+        return this._setupVisibilityObserver();
+      
+      case 'interaction':
+        return this._setupInteractionObserver();
+      
+      case 'custom':
+        if (this._checkCustomCondition()) {
+          return this._loadImmediate();
+        }
+        return null;
+      
+      default:
+        return this._loadImmediate();
+    }
+  }
+
+  // Cleanup method
+  cleanup() {
+    if (this.observer) {
+      this.observer.disconnect();
+      this.observer = null;
+    }
+    if (this.element && this.element.parentNode) {
+      this.element.parentNode.removeChild(this.element);
+      this.element = null;
+    }
+  }
+}
+
+// Performance Monitoring System for v1.5.0
+export const Performance = {
+  metrics: {
+    schemaInjections: [],
+    averageInjectionTime: 0,
+    cacheHitRate: 0,
+    totalSchemas: 0,
+    performanceScore: 100
+  },
+
+  // Record schema injection performance
+  recordInjection(duration, fromCache = false, schemaType = 'Unknown') {
+    const metric = {
+      duration,
+      fromCache,
+      schemaType,
+      timestamp: Date.now()
+    };
+
+    this.metrics.schemaInjections.push(metric);
+    
+    // Keep only last 100 measurements
+    if (this.metrics.schemaInjections.length > 100) {
+      this.metrics.schemaInjections = this.metrics.schemaInjections.slice(-100);
+    }
+
+    this._updateMetrics();
+  },
+
+  // Update calculated metrics
+  _updateMetrics() {
+    const injections = this.metrics.schemaInjections;
+    if (injections.length === 0) return;
+
+    // Calculate average injection time
+    const totalTime = injections.reduce((sum, m) => sum + m.duration, 0);
+    this.metrics.averageInjectionTime = totalTime / injections.length;
+
+    // Calculate cache hit rate
+    const cacheHits = injections.filter(m => m.fromCache).length;
+    this.metrics.cacheHitRate = (cacheHits / injections.length) * 100;
+
+    // Update total schemas
+    this.metrics.totalSchemas = injections.length;
+
+    // Calculate performance score
+    this._calculatePerformanceScore();
+  },
+
+  // Calculate overall performance score
+  _calculatePerformanceScore() {
+    let score = 100;
+    
+    // Deduct points for slow injections
+    if (this.metrics.averageInjectionTime > 5) score -= 20;
+    else if (this.metrics.averageInjectionTime > 2) score -= 10;
+    
+    // Add points for good cache hit rate
+    if (this.metrics.cacheHitRate > 80) score += 10;
+    else if (this.metrics.cacheHitRate < 20) score -= 15;
+    
+    // Deduct points for too many schemas (performance impact)
+    if (this.metrics.totalSchemas > 50) score -= 10;
+    
+    this.metrics.performanceScore = Math.max(0, Math.min(100, score));
+  },
+
+  // Get performance report
+  getReport() {
+    const report = {
+      ...this.metrics,
+      recommendations: this._generateRecommendations(),
+      timestamp: new Date().toISOString()
+    };
+
+    return report;
+  },
+
+  // Generate performance recommendations
+  _generateRecommendations() {
+    const recommendations = [];
+    
+    if (this.metrics.averageInjectionTime > 5) {
+      recommendations.push({
+        type: 'performance',
+        severity: 'high',
+        message: 'Schema injection time is slow. Consider enabling caching or reducing schema complexity.',
+        action: 'Enable intelligent caching: Cache.configure({ strategy: "intelligent" })'
+      });
+    }
+    
+    if (this.metrics.cacheHitRate < 30 && this.metrics.totalSchemas > 10) {
+      recommendations.push({
+        type: 'caching',
+        severity: 'medium',
+        message: 'Low cache hit rate detected. Review caching strategy.',
+        action: 'Optimize for reusable schemas or increase cache size: Cache.configure({ maxSize: 100 })'
+      });
+    }
+    
+    if (this.metrics.totalSchemas > 20) {
+      recommendations.push({
+        type: 'optimization',
+        severity: 'medium',
+        message: 'Many schemas detected. Consider lazy loading for better performance.',
+        action: 'Use LazySchema for non-critical schemas: new LazySchema("Product").loadWhen("visible")'
+      });
+    }
+    
+    if (this.metrics.performanceScore > 90) {
+      recommendations.push({
+        type: 'success',
+        severity: 'info',
+        message: 'Excellent performance! Your schema implementation is optimized.',
+        action: 'Continue monitoring performance as your application grows.'
+      });
+    }
+    
+    return recommendations;
+  },
+
+  // Clear performance data
+  clear() {
+    this.metrics = {
+      schemaInjections: [],
+      averageInjectionTime: 0,
+      cacheHitRate: 0,
+      totalSchemas: 0,
+      performanceScore: 100
+    };
+  }
+};
+
 // Schema builder helpers for common schema types
 export const SchemaHelpers = {
   /**
@@ -2413,20 +2957,69 @@ export function initSEO({
     })
   };
 
+  // Check cache for pre-validated schemas (v1.5.0 feature)
+  const cacheOptions = { debug, validate, allowDuplicates, id };
+  const cachedResult = globalSchemaCache.get(jsonLd, cacheOptions);
+  if (cachedResult && globalSchemaCache.shouldCache(jsonLd)) {
+    debugLog(`Cache hit for schema type: ${jsonLd['@type']}`, 'info', debug);
+    
+    // For cached results, we still need to inject the script element
+    if (cachedResult.valid !== false) {
+      try {
+        const script = document.createElement('script');
+        script.type = 'application/ld+json';
+        script.textContent = JSON.stringify(jsonLd, null, debug ? 2 : 0);
+        script.setAttribute('data-ai-seo', 'true');
+        script.setAttribute('data-ai-seo-id', schemaId);
+        script.setAttribute('data-ai-seo-type', jsonLd['@type']);
+        script.setAttribute('data-ai-seo-cached', 'true');
+        
+        document.head.appendChild(script);
+        
+        // Record cache hit performance
+        Performance.recordInjection(1.0, true, jsonLd['@type']); // Cache hits are fast (~1ms)
+        
+        // Register in global registry
+        schemaRegistry.set(schemaId, {
+          element: script,
+          schema: jsonLd,
+          timestamp: Date.now(),
+          fromCache: true
+        });
+        
+        debugLog(`Cached schema injected successfully with ID: ${schemaId}`, 'info', debug);
+        return script;
+      } catch (error) {
+        debugLog(`Failed to inject cached schema: ${error.message}`, 'error', debug);
+        // Fall through to normal processing
+      }
+    }
+  }
+
   // Schema validation
+  let validationResult = { valid: true };
   if (validate) {
-    const validation = validateSchema(jsonLd);
-    if (!validation.valid) {
-      debugLog(`Schema validation failed: ${validation.error}`, 'error', debug);
+    validationResult = validateSchema(jsonLd);
+    if (!validationResult.valid) {
+      debugLog(`Schema validation failed: ${validationResult.error}`, 'error', debug);
       if (debug) {
         console.error('[ai-seo] Invalid schema:', jsonLd);
       }
+      
+      // Cache failed validation to avoid reprocessing
+      if (globalSchemaCache.shouldCache(jsonLd)) {
+        globalSchemaCache.set(jsonLd, cacheOptions, { valid: false, error: validationResult.error });
+      }
+      
       return null;
     }
     debugLog('Schema validation passed', 'info', debug);
   }
 
   try {
+    // Performance monitoring start (v1.5.0)
+    const perfStart = performance.now();
+    
     // Create and inject script element
     const script = document.createElement('script');
     script.type = 'application/ld+json';
@@ -2437,14 +3030,37 @@ export function initSEO({
     
     document.head.appendChild(script);
     
+    // Performance monitoring end
+    const perfEnd = performance.now();
+    const injectionTime = perfEnd - perfStart;
+    const wasFromCache = false; // This is a new injection, not from cache
+    
+    // Record performance metrics
+    Performance.recordInjection(injectionTime, wasFromCache, jsonLd['@type']);
+    
     // Register in global registry for cleanup
     schemaRegistry.set(schemaId, {
       element: script,
       schema: jsonLd,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      performance: {
+        injectionTime,
+        fromCache: wasFromCache
+      }
     });
     
-    debugLog(`Schema injected successfully with ID: ${schemaId}`, 'info', debug);
+    // Cache successful schema processing for future use (v1.5.0 feature)
+    if (globalSchemaCache.shouldCache(jsonLd)) {
+      globalSchemaCache.set(jsonLd, cacheOptions, {
+        valid: true,
+        processed: true,
+        schemaId,
+        timestamp: Date.now()
+      });
+      debugLog(`Schema cached for future use`, 'info', debug);
+    }
+    
+    debugLog(`Schema injected successfully with ID: ${schemaId} (${injectionTime.toFixed(2)}ms)`, 'info', debug);
     return script;
     
   } catch (error) {
