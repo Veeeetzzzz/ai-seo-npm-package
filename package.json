@@ -1,18 +1,31 @@
 {
   "name": "ai-seo",
-  "version": "1.5.0",
-  "description": "Advanced AI-powered JSON-LD schema utility with intelligent caching, lazy loading, and performance monitoring. Zero dependencies.",
+  "version": "1.8.0",
+  "description": "AI-native JSON-LD schema utility with multi-platform deployment, enterprise features, advanced validation, and LLM optimization. Zero runtime dependencies.",
   "main": "index.js",
   "type": "module",
+  "bin": {
+    "ai-seo": "./cli/index.js"
+  },
   "exports": {
     ".": {
       "import": "./index.js",
       "types": "./index.d.ts"
+    },
+    "./cli": {
+      "import": "./cli/index.js",
+      "types": "./cli/index.d.ts"
+    },
+    "./tools": {
+      "import": "./tools/index.js",
+      "types": "./tools/index.d.ts"
     }
   },
   "files": [
     "index.js",
-    "index.d.ts"
+    "index.d.ts",
+    "cli/",
+    "tools/"
   ],
   "scripts": {
     "test": "node --test test/quick-test.js",
@@ -80,7 +93,28 @@
     "web-performance",
     "core-web-vitals",
     "lighthouse",
-    "pagespeed"
+    "pagespeed",
+    "llm-optimization",
+    "content-analysis",
+    "voice-search",
+    "ai-native",
+    "chatgpt-search",
+    "bard-optimization",
+    "claude-optimization",
+    "ai-search-engines",
+    "llm-friendly",
+    "semantic-analysis",
+    "natural-language-processing",
+    "ai-seo-optimization",
+    "cli-tools",
+    "developer-tools",
+    "devtools-extension",
+    "visual-builder",
+    "code-generation",
+    "schema-debugging",
+    "automation",
+    "developer-experience",
+    "dx"
   ],
   "author": "VX3.XYZ",
   "license": "MIT",

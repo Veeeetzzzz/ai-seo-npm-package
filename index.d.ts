@@ -549,4 +549,103 @@ export function listSchemas(): SchemaInfo[];
  * @param schemaId - The ID of the schema to retrieve
  * @returns Schema registry entry or null if not found
  */
-export function getSchema(schemaId: string): SchemaRegistryEntry | null; 
+export function getSchema(schemaId: string): SchemaRegistryEntry | null;
+
+// ==========================================
+// AI-POWERED FEATURES - NEW IN V1.6.0 🧠
+// ==========================================
+
+/**
+ * AI optimization options for LLM understanding
+ */
+export interface AIOptimizationOptions {
+  target?: ('chatgpt' | 'bard' | 'claude' | 'perplexity')[];
+  contentAnalysis?: boolean;
+  semanticEnhancement?: boolean;
+  voiceOptimization?: boolean;
+}
+
+/**
+ * Content analysis options
+ */
+export interface ContentAnalysisOptions {
+  confidence?: number;
+  multipleTypes?: boolean;
+  preferredTypes?: string[];
+  includeMetrics?: boolean;
+}
+
+/**
+ * Content analysis result
+ */
+export interface ContentAnalysisResult {
+  typeScores: Record<string, number>;
+  confidence: number;
+  recommendedType: string;
+  keywords?: string[];
+  entities?: {
+    people: string[];
+    places: string[];
+    organizations: string[];
+  };
+  sentiment?: {
+    score: number;
+    label: 'positive' | 'negative' | 'neutral';
+  };
+}
+
+/**
+ * Generated schema result
+ */
+export interface GeneratedSchemaResult {
+  schema: any;
+  confidence: number;
+  type: string;
+  metrics?: {
+    readabilityScore: number;
+    keywordDensity: number;
+    semanticRichness: number;
+  };
+}
+
+/**
+ * Voice search optimization options
+ */
+export interface VoiceSearchOptions {
+  includeQA?: boolean;
+  naturalLanguage?: boolean;
+  conversational?: boolean;
+}
+
+/**
+ * AI Engine for advanced schema optimization and content analysis
+ */
+export const AI: {
+  /**
+   * Optimize schemas for Large Language Model understanding
+   * Enhances schemas to be more AI-friendly and searchable
+   */
+  optimizeForLLM(schema: any, options?: AIOptimizationOptions): any;
+  
+  /**
+   * Generate schema from content analysis
+   * Automatically detects and creates appropriate schemas from page content
+   */
+  generateFromContent(content: string, options?: ContentAnalysisOptions): GeneratedSchemaResult[] | GeneratedSchemaResult | null;
+  
+  /**
+   * Analyze content and extract semantic information
+   * Returns detailed analysis for schema generation
+   */
+  analyzeContent(content: string, options?: {
+    includeKeywords?: boolean;
+    includeEntities?: boolean;
+    includeSentiment?: boolean;
+  }): ContentAnalysisResult | null;
+  
+  /**
+   * Optimize schema for voice search
+   * Enhances schemas for voice query compatibility
+   */
+  optimizeForVoiceSearch(schema: any, options?: VoiceSearchOptions): any;
+}; 
