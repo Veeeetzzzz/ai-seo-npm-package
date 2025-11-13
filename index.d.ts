@@ -648,4 +648,105 @@ export const AI: {
    * Enhances schemas for voice query compatibility
    */
   optimizeForVoiceSearch(schema: any, options?: VoiceSearchOptions): any;
+  
+  /**
+   * Detect relationships between schemas (v1.11.0)
+   * Suggests connections and related schemas
+   */
+  detectSchemaRelationships(schemas: any[], options?: {
+    suggestMissing?: boolean;
+    detectConflicts?: boolean;
+  }): {
+    relationships: Array<{
+      from: { type: string; index: number };
+      to: { type: string; index: number };
+      relationship: string;
+      strength: string;
+      suggestion: string;
+    }>;
+    suggestions: Array<{
+      schemaType: string;
+      schemaIndex?: number;
+      missingType: string;
+      priority: string;
+      suggestion: string;
+      property: string;
+    }>;
+    conflicts: Array<{
+      type: string;
+      schemas: number[];
+      severity: string;
+      message: string;
+      recommendation: string;
+    }>;
+    summary: {
+      totalSchemas: number;
+      totalRelationships: number;
+      suggestionCount: number;
+      conflictCount: number;
+    };
+  };
+};
+
+/**
+ * Schema Templates - Pre-built templates for common industries (v1.11.0)
+ */
+export const Templates: {
+  ecommerce: {
+    productPage: (data: any) => any;
+    onlineStore: (data: any) => any;
+  };
+  restaurant: {
+    restaurant: (data: any) => any;
+    menuItem: (data: any) => any;
+  };
+  healthcare: {
+    medicalOrganization: (data: any) => any;
+    physician: (data: any) => any;
+  };
+  realEstate: {
+    realEstateProperty: (data: any) => any;
+    realEstateAgency: (data: any) => any;
+  };
+  education: {
+    school: (data: any) => any;
+    course: (data: any) => any;
+  };
+  professional: {
+    lawFirm: (data: any) => any;
+    accountingFirm: (data: any) => any;
+  };
+  media: {
+    podcast: (data: any) => any;
+    podcastEpisode: (data: any) => any;
+    software: (data: any) => any;
+  };
+  content: {
+    blogPost: (data: any) => any;
+    faqPage: (data: any) => any;
+    /** NEW in v1.11.0 - Blog series with part navigation */
+    blogSeries: (data: any) => any;
+    /** NEW in v1.11.0 - Step-by-step tutorial/how-to */
+    tutorial: (data: any) => any;
+    /** NEW in v1.11.0 - Customer testimonial */
+    testimonial: (data: any) => any;
+  };
+  /** NEW in v1.11.0 - E-commerce extensions */
+  ecommerceExtensions: {
+    /** Product bundle with multiple items */
+    productBundle: (data: any) => any;
+    /** Product variants (size, color, material) */
+    productVariant: (data: any) => any;
+  };
+  /** NEW in v1.11.0 - Professional service extensions */
+  professionalExtensions: {
+    /** Service area business with geo-targeting */
+    serviceArea: (data: any) => any;
+    /** Multi-location business/franchise */
+    multiLocationBusiness: (data: any) => any;
+    /** Professional service offering */
+    professionalService: (data: any) => any;
+    /** Professional certification */
+    certification: (data: any) => any;
+  };
 }; 

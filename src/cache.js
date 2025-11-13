@@ -8,6 +8,7 @@ export class SchemaCache {
       strategy: 'intelligent', // 'none', 'basic', 'intelligent'
       ttl: 3600000, // 1 hour default
       maxSize: 50,
+      maxEntrySize: 1048576, // 1MB max entry size (v1.10.4)
       enableCompression: true,
       enableMetrics: true
     };
@@ -15,7 +16,8 @@ export class SchemaCache {
       hits: 0,
       misses: 0,
       compressionSavings: 0,
-      averageAccessTime: 0
+      averageAccessTime: 0,
+      rejectedEntries: 0 // Track entries rejected due to size (v1.10.4)
     };
     this.accessTimes = [];
   }
@@ -35,15 +37,33 @@ export class SchemaCache {
   }
 
   _generateKey(schema, options = {}) {
-    // Create a stable cache key based on schema content and options
+    // Improved cache key generation for better performance (v1.10.4)
+    // Only include essential parts of schema to reduce key computation time
     const keyData = {
       type: schema['@type'],
-      content: JSON.stringify(schema),
-      options: JSON.stringify(options)
+      // Use a subset of schema for smaller schemas, full for complex ones
+      content: this._getSchemaFingerprint(schema),
+      options: Object.keys(options).length > 0 ? JSON.stringify(options) : ''
     };
     
     // Simple hash function for cache key
-    return this._hash(JSON.stringify(keyData));
+    return this._hash(`${keyData.type}:${keyData.content}:${keyData.options}`);
+  }
+
+  _getSchemaFingerprint(schema) {
+    // Generate a lightweight fingerprint instead of stringifying entire schema
+    const schemaStr = JSON.stringify(schema);
+    if (schemaStr.length < 500) {
+      return schemaStr;
+    }
+    // For large schemas, create a fingerprint from key properties
+    const fingerprint = {
+      t: schema['@type'],
+      n: schema.name || '',
+      d: schema.description ? schema.description.substring(0, 50) : '',
+      l: schemaStr.length
+    };
+    return JSON.stringify(fingerprint);
   }
 
   _hash(str) {
@@ -94,7 +114,6 @@ export class SchemaCache {
 
   _recordAccess(hit = true) {
     const accessTime = performance.now();
-    this.accessTimes.push(accessTime);
     
     if (this.config.enableMetrics) {
       if (hit) {
@@ -103,12 +122,18 @@ export class SchemaCache {
         this.metrics.misses++;
       }
       
-      // Keep only last 100 access times for average calculation
-      if (this.accessTimes.length > 100) {
-        this.accessTimes = this.accessTimes.slice(-100);
+      this.accessTimes.push(accessTime);
+      
+      // Keep only last 50 access times for better memory efficiency
+      // Reduced from 100 to 50 in v1.10.3 for improved performance
+      if (this.accessTimes.length > 50) {
+        this.accessTimes = this.accessTimes.slice(-50);
       }
       
-      this.metrics.averageAccessTime = this.accessTimes.reduce((a, b) => a + b, 0) / this.accessTimes.length;
+      // Calculate average only if we have access times
+      if (this.accessTimes.length > 0) {
+        this.metrics.averageAccessTime = this.accessTimes.reduce((a, b) => a + b, 0) / this.accessTimes.length;
+      }
     }
   }
 
@@ -136,6 +161,18 @@ export class SchemaCache {
   set(schema, options = {}, result) {
     if (this.config.strategy === 'none') return false;
     
+    // Check entry size limit before caching (v1.10.4)
+    const resultStr = JSON.stringify(result);
+    const entrySize = resultStr.length;
+    
+    if (entrySize > this.config.maxEntrySize) {
+      // Entry too large, don't cache
+      if (this.config.enableMetrics) {
+        this.metrics.rejectedEntries++;
+      }
+      return false;
+    }
+    
     const key = this._generateKey(schema, options);
     const compressedData = this._compress(result);
     
@@ -144,7 +181,7 @@ export class SchemaCache {
       timestamp: Date.now(),
       lastAccessed: Date.now(),
       schemaType: schema['@type'],
-      size: JSON.stringify(result).length
+      size: entrySize
     };
     
     this.cache.set(key, entry);
@@ -159,7 +196,8 @@ export class SchemaCache {
       hits: 0,
       misses: 0,
       compressionSavings: 0,
-      averageAccessTime: 0
+      averageAccessTime: 0,
+      rejectedEntries: 0
     };
     this.accessTimes = [];
   }

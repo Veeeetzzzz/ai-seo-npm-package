@@ -14,24 +14,24 @@ describe('SSR Utilities', () => {
     it('should generate a basic script tag', () => {
       const scriptTag = SSR.generateScriptTag(testSchema);
       
-      expect(scriptTag).toContain('<script');
-      expect(scriptTag).toContain('type="application/ld+json"');
-      expect(scriptTag).toContain('data-ai-seo="true"');
-      expect(scriptTag).toContain('data-ai-seo-type="Organization"');
-      expect(scriptTag).toContain(JSON.stringify(testSchema));
-      expect(scriptTag).toContain('</script>');
+      assert.ok(scriptTag.includes('<script'));
+      assert.ok(scriptTag.includes('type="application/ld+json"'));
+      assert.ok(scriptTag.includes('data-ai-seo="true"'));
+      assert.ok(scriptTag.includes('data-ai-seo-type="Organization"'));
+      assert.ok(scriptTag.includes(JSON.stringify(testSchema)));
+      assert.ok(scriptTag.includes('</script>'));
     });
 
     it('should format JSON with pretty printing when requested', () => {
       const scriptTag = SSR.generateScriptTag(testSchema, { pretty: true });
       
-      expect(scriptTag).toContain('{\n  "@context"');
+      assert.ok(scriptTag.includes('{\n  "@context"'));
     });
 
     it('should include custom ID when provided', () => {
       const scriptTag = SSR.generateScriptTag(testSchema, { id: 'custom-id' });
       
-      expect(scriptTag).toContain('data-ai-seo-id="custom-id"');
+      assert.ok(scriptTag.includes('data-ai-seo-id="custom-id"'));
     });
 
     it('should include custom data attributes', () => {
@@ -42,13 +42,13 @@ describe('SSR Utilities', () => {
         }
       });
       
-      expect(scriptTag).toContain('data-custom="value"');
-      expect(scriptTag).toContain('data-test="attribute"');
+      assert.ok(scriptTag.includes('data-custom="value"'));
+      assert.ok(scriptTag.includes('data-test="attribute"'));
     });
 
     it('should throw error for invalid schema', () => {
-      expect(() => SSR.generateScriptTag(null)).toThrow('Invalid schema provided');
-      expect(() => SSR.generateScriptTag('invalid')).toThrow('Invalid schema provided');
+      assert.throws(() => SSR.generateScriptTag(null), /Invalid schema/);
+      assert.throws(() => SSR.generateScriptTag('invalid'), /Invalid schema/);
     });
   });
 
@@ -61,28 +61,28 @@ describe('SSR Utilities', () => {
 
       const scriptTags = SSR.generateMultipleScriptTags(schemas);
       
-      expect(scriptTags.split('<script').length - 1).toBe(2);
-      expect(scriptTags).toContain('Organization');
-      expect(scriptTags).toContain('Person');
+      assert.strictEqual(scriptTags.split('<script').length - 1, 2);
+      assert.ok(scriptTags.includes('Organization'));
+      assert.ok(scriptTags.includes('Person'));
     });
 
     it('should format with newlines when pretty is enabled', () => {
       const schemas = [testSchema, testSchema];
       const scriptTags = SSR.generateMultipleScriptTags(schemas, { pretty: true });
       
-      expect(scriptTags).toContain('</script>\n<script');
+      assert.ok(scriptTags.includes('</script>\n<script'));
     });
 
     it('should generate unique IDs for each schema', () => {
       const schemas = [testSchema, testSchema];
       const scriptTags = SSR.generateMultipleScriptTags(schemas, { id: 'multi' });
       
-      expect(scriptTags).toContain('data-ai-seo-id="multi-0"');
-      expect(scriptTags).toContain('data-ai-seo-id="multi-1"');
+      assert.ok(scriptTags.includes('data-ai-seo-id="multi-0"'));
+      assert.ok(scriptTags.includes('data-ai-seo-id="multi-1"'));
     });
 
     it('should throw error for non-array input', () => {
-      expect(() => SSR.generateMultipleScriptTags('invalid')).toThrow('Schemas must be an array');
+      assert.throws(() => SSR.generateMultipleScriptTags('invalid'), /array/i);
     });
   });
 
@@ -90,17 +90,17 @@ describe('SSR Utilities', () => {
     it('should generate JSON string', () => {
       const jsonString = SSR.generateJSONString(testSchema);
       
-      expect(jsonString).toBe(JSON.stringify(testSchema));
+      assert.strictEqual(jsonString, JSON.stringify(testSchema));
     });
 
     it('should generate pretty JSON when requested', () => {
       const jsonString = SSR.generateJSONString(testSchema, true);
       
-      expect(jsonString).toContain('{\n  "@context"');
+      assert.ok(jsonString.includes('{\n  "@context"'));
     });
 
     it('should throw error for invalid schema', () => {
-      expect(() => SSR.generateJSONString(null)).toThrow('Invalid schema provided');
+      assert.throws(() => SSR.generateJSONString(null), /Invalid schema/);
     });
   });
 
@@ -113,13 +113,13 @@ describe('SSR Utilities', () => {
         url: 'https://example.com'
       });
 
-      expect(socialMeta).toContain('property="og:title"');
-      expect(socialMeta).toContain('content="Test Title"');
-      expect(socialMeta).toContain('name="twitter:title"');
-      expect(socialMeta).toContain('property="og:description"');
-      expect(socialMeta).toContain('property="og:image"');
-      expect(socialMeta).toContain('property="og:url"');
-      expect(socialMeta).toContain('name="twitter:card"');
+      assert.ok(socialMeta.includes('property="og:title"'));
+      assert.ok(socialMeta.includes('content="Test Title"'));
+      assert.ok(socialMeta.includes('name="twitter:title"'));
+      assert.ok(socialMeta.includes('property="og:description"'));
+      assert.ok(socialMeta.includes('property="og:image"'));
+      assert.ok(socialMeta.includes('property="og:url"'));
+      assert.ok(socialMeta.includes('name="twitter:card"'));
     });
 
     it('should handle optional parameters', () => {
@@ -128,9 +128,9 @@ describe('SSR Utilities', () => {
         siteName: 'Test Site'
       });
 
-      expect(socialMeta).toContain('property="og:title"');
-      expect(socialMeta).toContain('property="og:site_name"');
-      expect(socialMeta).not.toContain('og:description');
+      assert.ok(socialMeta.includes('property="og:title"'));
+      assert.ok(socialMeta.includes('property="og:site_name"'));
+      assert.ok(!socialMeta.includes('og:description'));
     });
   });
 
@@ -142,19 +142,19 @@ describe('SSR Utilities', () => {
           { title: 'Test Title', description: 'Test Description' }
         );
 
-        expect(headContent.jsonLd).toContain('<script');
-        expect(headContent.socialMeta).toContain('property="og:title"');
-        expect(headContent.combined).toContain('<script');
-        expect(headContent.combined).toContain('property="og:title"');
+        assert.ok(headContent.jsonLd.includes('<script'));
+        assert.ok(headContent.socialMeta.includes('property="og:title"'));
+        assert.ok(headContent.combined.includes('<script'));
+        assert.ok(headContent.combined.includes('property="og:title"'));
       });
 
       it('should handle schema without social meta', () => {
         const headContent = SSR.frameworks.nextJS.generateHeadContent(testSchema);
 
-        expect(headContent.jsonLd).toContain('<script');
-        expect(headContent.socialMeta).toBe('');
-        expect(headContent.combined).toContain('<script');
-        expect(headContent.combined).not.toContain('property="og:');
+        assert.ok(headContent.jsonLd.includes('<script'));
+        assert.strictEqual(headContent.socialMeta, '');
+        assert.ok(headContent.combined.includes('<script'));
+        assert.ok(!headContent.combined.includes('property="og:'));
       });
     });
 
@@ -165,22 +165,22 @@ describe('SSR Utilities', () => {
           { title: 'Test Title', description: 'Test Description' }
         );
 
-        expect(headConfig.script).toHaveLength(1);
-        expect(headConfig.script[0].type).toBe('application/ld+json');
-        expect(headConfig.script[0].innerHTML).toContain('Organization');
+        assert.strictEqual(headConfig.script.length, 1);
+        assert.strictEqual(headConfig.script[0].type, 'application/ld+json');
+        assert.ok(headConfig.script[0].innerHTML.includes('Organization'));
         
-        expect(headConfig.meta).toBeDefined();
-        expect(headConfig.meta.length).toBeGreaterThan(0);
+        assert.ok(headConfig.meta);
+        assert.ok(headConfig.meta.length > 0);
         
         const titleMeta = headConfig.meta.find(m => m.property === 'og:title');
-        expect(titleMeta.content).toBe('Test Title');
+        assert.strictEqual(titleMeta.content, 'Test Title');
       });
 
       it('should handle schema without social meta', () => {
         const headConfig = SSR.frameworks.nuxt.generateHeadConfig(testSchema);
 
-        expect(headConfig.script).toHaveLength(1);
-        expect(headConfig.meta).toBeUndefined();
+        assert.strictEqual(headConfig.script.length, 1);
+        assert.strictEqual(headConfig.meta, undefined);
       });
     });
   });

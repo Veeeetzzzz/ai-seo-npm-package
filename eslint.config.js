@@ -17,7 +17,7 @@ export default [
       'prefer-const': 'error',
       
       // Code quality
-      'no-console': 'off', // We use console for debug logging
+      'no-console': 'warn', // Prefer debugLog utility over direct console usage
       'no-debugger': 'error',
       'no-alert': 'error',
       

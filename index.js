@@ -108,7 +108,7 @@ class SchemaCache {
       
       // Keep only last 100 access times for average calculation
       if (this.accessTimes.length > 100) {
-        this.accessTimes = this.accessTimes.slice(-100);
+        this.accessTimes = this.accessTimes.slice(-50); // More aggressive cleanup
       }
       
       this.metrics.averageAccessTime = this.accessTimes.reduce((a, b) => a + b, 0) / this.accessTimes.length;
@@ -342,12 +342,12 @@ export class LazySchema {
       this.loaded = true;
       
       if (this.config.debug) {
-        console.log(`[ai-seo] Lazy loaded ${this.schemaType} schema`);
+        debugLog(`Lazy loaded ${this.schemaType} schema`, 'info', true);
       }
       
       return result;
     } catch (error) {
-      console.error('[ai-seo] Error in lazy schema loading:', error);
+      debugLog(`Error in lazy schema loading: ${error.message}`, 'error', this.config.debug);
       return null;
     }
   }
@@ -369,7 +369,7 @@ export class LazySchema {
       try {
         return this.customCondition();
       } catch (error) {
-        console.error('[ai-seo] Error in custom condition:', error);
+        debugLog(`Error in custom condition: ${error.message}`, 'error', this.config.debug);
         return true; // Fallback to loading
       }
     }
@@ -1852,6 +1852,237 @@ export const Templates = {
         .description(faqData.description)
         .addProperty('mainEntity', mainEntity)
         .build();
+    },
+
+    // Blog series - v1.11.0
+    blogSeries: (seriesData) => {
+      return createSchema('BlogPosting')
+        .name(seriesData.title)
+        .description(seriesData.description)
+        .author(seriesData.author)
+        .publisher(seriesData.publisher)
+        .addProperty('isPartOf', {
+          '@type': 'Blog',
+          name: seriesData.seriesName || seriesData.title
+        })
+        .addProperty('position', seriesData.partNumber)
+        .addProperty('hasPart', (seriesData.parts || []).map(part => ({
+          '@type': 'BlogPosting',
+          name: part.title,
+          url: part.url
+        })))
+        .addProperty('keywords', seriesData.tags || [])
+        .build();
+    },
+
+    // Tutorial/How-to - v1.11.0
+    tutorial: (tutorialData) => {
+      const steps = (tutorialData.steps || []).map((step, index) => ({
+        '@type': 'HowToStep',
+        name: step.title || `Step ${index + 1}`,
+        text: step.description,
+        image: step.image,
+        url: step.url
+      }));
+
+      return createSchema('HowTo')
+        .name(tutorialData.title)
+        .description(tutorialData.description)
+        .image(tutorialData.image)
+        .addProperty('step', steps)
+        .addProperty('totalTime', tutorialData.duration)
+        .addProperty('estimatedCost', tutorialData.cost ? {
+          '@type': 'MonetaryAmount',
+          currency: tutorialData.currency || 'USD',
+          value: tutorialData.cost
+        } : undefined)
+        .addProperty('tool', tutorialData.tools)
+        .addProperty('supply', tutorialData.materials)
+        .build();
+    },
+
+    // Testimonial - v1.11.0
+    testimonial: (testimonialData) => {
+      return createSchema('Review')
+        .name(testimonialData.title || 'Customer Testimonial')
+        .addProperty('reviewBody', testimonialData.text)
+        .addProperty('reviewRating', testimonialData.rating ? {
+          '@type': 'Rating',
+          ratingValue: testimonialData.rating,
+          bestRating: testimonialData.maxRating || 5
+        } : undefined)
+        .addProperty('author', {
+          '@type': 'Person',
+          name: testimonialData.customerName,
+          jobTitle: testimonialData.customerTitle
+        })
+        .addProperty('datePublished', testimonialData.date)
+        .addProperty('itemReviewed', {
+          '@type': testimonialData.itemType || 'Product',
+          name: testimonialData.itemName
+        })
+        .build();
+    }
+  },
+
+  /**
+   * NEW in v1.11.0 - E-commerce Extensions
+   */
+  ecommerceExtensions: {
+    // Product bundle - v1.11.0
+    productBundle: (bundleData) => {
+      return createSchema('ProductGroup')
+        .name(bundleData.name)
+        .description(bundleData.description)
+        .image(bundleData.images)
+        .addProperty('variesBy', 'bundleComponents')
+        .addProperty('hasVariant', (bundleData.products || []).map(product => ({
+          '@type': 'Product',
+          name: product.name,
+          sku: product.sku,
+          offers: {
+            '@type': 'Offer',
+            price: product.price,
+            priceCurrency: bundleData.currency || 'USD'
+          }
+        })))
+        .addProperty('offers', {
+          '@type': 'AggregateOffer',
+          lowPrice: bundleData.totalPrice,
+          priceCurrency: bundleData.currency || 'USD',
+          availability: bundleData.inStock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock'
+        })
+        .build();
+    },
+
+    // Product variant - v1.11.0
+    productVariant: (variantData) => {
+      return createSchema('ProductModel')
+        .name(variantData.name)
+        .description(variantData.description)
+        .image(variantData.images)
+        .addProperty('isVariantOf', {
+          '@type': 'ProductGroup',
+          name: variantData.parentProduct
+        })
+        .addProperty('color', variantData.color)
+        .addProperty('size', variantData.size)
+        .addProperty('material', variantData.material)
+        .addProperty('sku', variantData.sku)
+        .addProperty('gtin', variantData.gtin)
+        .offers({
+          price: variantData.price,
+          priceCurrency: variantData.currency || 'USD',
+          availability: variantData.inStock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock'
+        })
+        .build();
+    }
+  },
+
+  /**
+   * NEW in v1.11.0 - Professional Services Extensions
+   */
+  professionalExtensions: {
+    // Service area business - v1.11.0
+    serviceArea: (serviceData) => {
+      return localBusiness(serviceData.businessType || 'Service')
+        .name(serviceData.name)
+        .description(serviceData.description)
+        .telephone(serviceData.phone)
+        .email(serviceData.email)
+        .url(serviceData.website)
+        .addProperty('areaServed', (serviceData.areas || []).map(area => ({
+          '@type': 'GeoCircle',
+          geoMidpoint: {
+            '@type': 'GeoCoordinates',
+            latitude: area.latitude,
+            longitude: area.longitude
+          },
+          geoRadius: area.radius || '50 miles'
+        })))
+        .addProperty('serviceType', serviceData.services)
+        .build();
+    },
+
+    // Multi-location business - v1.11.0
+    multiLocationBusiness: (businessData) => {
+      const locations = (businessData.locations || []).map(location => ({
+        '@type': 'LocalBusiness',
+        name: location.name || businessData.name,
+        address: {
+          '@type': 'PostalAddress',
+          streetAddress: location.address.street,
+          addressLocality: location.address.city,
+          addressRegion: location.address.state,
+          postalCode: location.address.zip,
+          addressCountry: location.address.country
+        },
+        telephone: location.phone,
+        geo: location.latitude && location.longitude ? {
+          '@type': 'GeoCoordinates',
+          latitude: location.latitude,
+          longitude: location.longitude
+        } : undefined,
+        openingHoursSpecification: location.hours
+      }));
+
+      return organization()
+        .name(businessData.name)
+        .description(businessData.description)
+        .url(businessData.website)
+        .addProperty('@type', 'Organization')
+        .addProperty('subOrganization', locations)
+        .addProperty('numberOfLocations', locations.length)
+        .build();
+    },
+
+    // Professional service offering - v1.11.0
+    professionalService: (serviceData) => {
+      return createSchema('Service')
+        .name(serviceData.name)
+        .description(serviceData.description)
+        .addProperty('provider', {
+          '@type': serviceData.providerType || 'Organization',
+          name: serviceData.providerName,
+          telephone: serviceData.phone,
+          address: serviceData.address
+        })
+        .addProperty('areaServed', serviceData.serviceArea)
+        .addProperty('serviceType', serviceData.category)
+        .addProperty('termsOfService', serviceData.terms)
+        .offers({
+          price: serviceData.price,
+          priceCurrency: serviceData.currency || 'USD',
+          availability: 'https://schema.org/InStock'
+        })
+        .addProperty('aggregateRating', serviceData.rating ? {
+          '@type': 'AggregateRating',
+          ratingValue: serviceData.rating,
+          reviewCount: serviceData.reviewCount
+        } : undefined)
+        .build();
+    },
+
+    // Professional certification - v1.11.0
+    certification: (certData) => {
+      return createSchema('EducationalOccupationalCredential')
+        .name(certData.name)
+        .description(certData.description)
+        .addProperty('credentialCategory', certData.category || 'Certification')
+        .addProperty('competencyRequired', certData.requirements)
+        .addProperty('educationalLevel', certData.level)
+        .addProperty('recognizedBy', {
+          '@type': 'Organization',
+          name: certData.issuingOrganization
+        })
+        .addProperty('validFrom', certData.issueDate)
+        .addProperty('validUntil', certData.expiryDate)
+        .addProperty('credentialHolder', certData.holder ? {
+          '@type': 'Person',
+          name: certData.holder.name,
+          jobTitle: certData.holder.title
+        } : undefined)
+        .build();
     }
   }
 };
@@ -3003,7 +3234,7 @@ export function initSEO({
     if (!validationResult.valid) {
       debugLog(`Schema validation failed: ${validationResult.error}`, 'error', debug);
       if (debug) {
-        console.error('[ai-seo] Invalid schema:', jsonLd);
+        debugLog(`Invalid schema: ${JSON.stringify(jsonLd)}`, 'error', true);
       }
       
       // Cache failed validation to avoid reprocessing
@@ -3331,6 +3562,192 @@ export const AI = {
     return optimized;
   },
   
+  /**
+   * Detect relationships between schemas (v1.11.0)
+   * Suggests connections and related schemas
+   */
+  detectSchemaRelationships: (schemas, options = {}) => {
+    const { suggestMissing = true, detectConflicts = true } = options;
+    
+    if (!Array.isArray(schemas) || schemas.length === 0) {
+      return { relationships: [], suggestions: [], conflicts: [] };
+    }
+    
+    const relationships = [];
+    const suggestions = [];
+    const conflicts = [];
+    
+    // Relationship patterns based on schema types
+    const relationshipRules = {
+      'Product': {
+        relatesTo: ['Review', 'Offer', 'AggregateRating', 'Brand', 'Organization'],
+        suggests: ['Add customer reviews for trust', 'Include aggregate rating', 'Add brand information'],
+        properties: ['review', 'aggregateRating', 'brand', 'offers']
+      },
+      'Article': {
+        relatesTo: ['Person', 'Organization', 'ImageObject'],
+        suggests: ['Add author person schema', 'Include publisher organization', 'Add featured image'],
+        properties: ['author', 'publisher', 'image']
+      },
+      'LocalBusiness': {
+        relatesTo: ['PostalAddress', 'GeoCoordinates', 'OpeningHoursSpecification', 'Review'],
+        suggests: ['Add complete address', 'Include geo coordinates', 'Add opening hours', 'Include customer reviews'],
+        properties: ['address', 'geo', 'openingHoursSpecification', 'review']
+      },
+      'Event': {
+        relatesTo: ['Place', 'Organization', 'Person', 'Offer'],
+        suggests: ['Add event location', 'Include organizer', 'Add ticket offers'],
+        properties: ['location', 'organizer', 'performer', 'offers']
+      },
+      'Recipe': {
+        relatesTo: ['Person', 'NutritionInformation', 'Review', 'ImageObject'],
+        suggests: ['Add recipe author', 'Include nutrition info', 'Add recipe images'],
+        properties: ['author', 'nutrition', 'review', 'image']
+      },
+      'Person': {
+        relatesTo: ['Organization', 'PostalAddress'],
+        suggests: ['Add affiliated organization', 'Include address'],
+        properties: ['affiliation', 'worksFor', 'address']
+      },
+      'Organization': {
+        relatesTo: ['PostalAddress', 'Person', 'Brand'],
+        suggests: ['Add organization address', 'Include founder/CEO', 'Add brand info'],
+        properties: ['address', 'founder', 'employee', 'brand']
+      }
+    };
+    
+    // Analyze each schema
+    schemas.forEach((schema, index) => {
+      const schemaType = schema['@type'];
+      
+      if (!schemaType) return;
+      
+      // Check relationships with other schemas
+      schemas.forEach((otherSchema, otherIndex) => {
+        if (index === otherIndex) return;
+        
+        const otherType = otherSchema['@type'];
+        const rules = relationshipRules[schemaType];
+        
+        if (rules && rules.relatesTo.includes(otherType)) {
+          relationships.push({
+            from: { type: schemaType, index },
+            to: { type: otherType, index: otherIndex },
+            relationship: 'related',
+            strength: 'high',
+            suggestion: `Link ${schemaType} to ${otherType} for better context`
+          });
+        }
+      });
+      
+      // Suggest missing relationships
+      if (suggestMissing && relationshipRules[schemaType]) {
+        const rules = relationshipRules[schemaType];
+        const existingTypes = schemas.map(s => s['@type']);
+        
+        rules.relatesTo.forEach((relatedType, idx) => {
+          if (!existingTypes.includes(relatedType)) {
+            // Check if the property already exists in the schema
+            const propertyName = rules.properties[idx];
+            if (!schema[propertyName] || (Array.isArray(schema[propertyName]) && schema[propertyName].length === 0)) {
+              suggestions.push({
+                schemaType,
+                schemaIndex: index,
+                missingType: relatedType,
+                priority: idx === 0 ? 'high' : 'medium',
+                suggestion: rules.suggests[idx],
+                property: propertyName
+              });
+            }
+          }
+        });
+      }
+      
+      // Detect conflicts (duplicate schemas, inconsistent data)
+      if (detectConflicts) {
+        schemas.forEach((otherSchema, otherIndex) => {
+          if (index >= otherIndex) return; // Only check each pair once
+          
+          const otherType = otherSchema['@type'];
+          
+          // Check for duplicate schemas of same type
+          if (schemaType === otherType) {
+            const nameMatch = schema.name === otherSchema.name;
+            const urlMatch = schema.url === otherSchema.url;
+            
+            if (nameMatch || urlMatch) {
+              conflicts.push({
+                type: 'duplicate',
+                schemas: [index, otherIndex],
+                severity: 'medium',
+                message: `Potential duplicate ${schemaType} schemas detected`,
+                recommendation: 'Consider merging these schemas'
+              });
+            }
+          }
+          
+          // Check for inconsistent linked data
+          if (schema.name && otherSchema.name) {
+            const schema1References = JSON.stringify(schema).includes(otherSchema.name);
+            const schema2References = JSON.stringify(otherSchema).includes(schema.name);
+            
+            if (schema1References || schema2References) {
+              relationships.push({
+                from: { type: schemaType, index },
+                to: { type: otherType, index: otherIndex },
+                relationship: 'cross-referenced',
+                strength: 'medium',
+                suggestion: 'Schemas reference each other'
+              });
+            }
+          }
+        });
+      }
+    });
+    
+    // Detect common patterns and suggest bundles
+    const schemaTypes = schemas.map(s => s['@type']).filter(Boolean);
+    const hasProduct = schemaTypes.includes('Product');
+    const hasOrganization = schemaTypes.includes('Organization');
+    const hasLocalBusiness = schemaTypes.includes('LocalBusiness');
+    
+    if (hasProduct && !schemaTypes.includes('Review') && !schemaTypes.includes('AggregateRating')) {
+      suggestions.push({
+        schemaType: 'Product',
+        missingType: 'Review',
+        priority: 'high',
+        suggestion: 'Add customer reviews to increase trust and SEO visibility',
+        property: 'review'
+      });
+    }
+    
+    if ((hasOrganization || hasLocalBusiness) && !schemaTypes.includes('PostalAddress')) {
+      suggestions.push({
+        schemaType: hasOrganization ? 'Organization' : 'LocalBusiness',
+        missingType: 'PostalAddress',
+        priority: 'high',
+        suggestion: 'Add complete address for local SEO',
+        property: 'address'
+      });
+    }
+    
+    return {
+      relationships: relationships.filter((r, i, self) => 
+        i === self.findIndex(t => 
+          t.from.index === r.from.index && t.to.index === r.to.index
+        )
+      ),
+      suggestions: suggestions.slice(0, 10), // Limit to top 10 suggestions
+      conflicts,
+      summary: {
+        totalSchemas: schemas.length,
+        totalRelationships: relationships.length,
+        suggestionCount: suggestions.length,
+        conflictCount: conflicts.length
+      }
+    };
+  },
+  
   // Private helper methods
   _analyzeContent: (content) => {
     const words = content.toLowerCase().split(/\s+/);
@@ -3451,27 +3868,213 @@ export const AI = {
     }
   },
   
-  _extractKeywords: (content) => {
-    const words = content.toLowerCase().match(/\b\w{3,}\b/g) || [];
-    const frequency = {};
+  _extractKeywords: (content, options = {}) => {
+    const { maxKeywords = 10, includePhrases = true, useTFIDF = true } = options;
     
-    words.forEach(word => {
-      frequency[word] = (frequency[word] || 0) + 1;
+    // Stop words to filter out
+    const stopWords = new Set([
+      'the', 'be', 'to', 'of', 'and', 'a', 'in', 'that', 'have', 'i',
+      'it', 'for', 'not', 'on', 'with', 'he', 'as', 'you', 'do', 'at',
+      'this', 'but', 'his', 'by', 'from', 'they', 'we', 'say', 'her', 'she',
+      'or', 'an', 'will', 'my', 'one', 'all', 'would', 'there', 'their',
+      'what', 'so', 'up', 'out', 'if', 'about', 'who', 'get', 'which', 'go',
+      'me', 'when', 'make', 'can', 'like', 'time', 'no', 'just', 'him', 'know',
+      'take', 'people', 'into', 'year', 'your', 'some', 'could', 'them', 'see',
+      'other', 'than', 'then', 'now', 'look', 'only', 'come', 'its', 'over',
+      'think', 'also', 'back', 'after', 'use', 'two', 'how', 'our', 'work',
+      'first', 'well', 'way', 'even', 'new', 'want', 'because', 'any', 'these',
+      'give', 'day', 'most', 'us', 'is', 'was', 'are', 'been', 'has', 'had',
+      'were', 'said', 'did', 'having', 'may'
+    ]);
+    
+    // Extract single words with frequency
+    const words = content.toLowerCase().match(/\b[a-z]{3,}\b/g) || [];
+    const filteredWords = words.filter(word => !stopWords.has(word));
+    
+    const wordFrequency = {};
+    filteredWords.forEach(word => {
+      wordFrequency[word] = (wordFrequency[word] || 0) + 1;
     });
     
-    return Object.entries(frequency)
-      .sort(([,a], [,b]) => b - a)
-      .slice(0, 10)
-      .map(([word]) => word);
+    // Simple TF-IDF approximation (using term frequency & word length as proxy for importance)
+    const tfIdfScores = {};
+    if (useTFIDF) {
+      const totalWords = filteredWords.length;
+      Object.entries(wordFrequency).forEach(([word, freq]) => {
+        const tf = freq / totalWords;
+        // Use word length and uniqueness as IDF proxy (longer, rarer words = more important)
+        const idf = Math.log(totalWords / freq) * (word.length / 5);
+        tfIdfScores[word] = tf * idf * 100; // Scale for easier scoring
+      });
+    }
+    
+    // Extract 2-word and 3-word phrases (n-grams)
+    const phrases = [];
+    if (includePhrases) {
+      const tokens = content.toLowerCase().split(/\s+/);
+      
+      // 2-word phrases (bigrams)
+      for (let i = 0; i < tokens.length - 1; i++) {
+        const word1 = tokens[i].match(/^[a-z]{3,}$/)?.[0];
+        const word2 = tokens[i + 1].match(/^[a-z]{3,}$/)?.[0];
+        
+        if (word1 && word2 && !stopWords.has(word1) && !stopWords.has(word2)) {
+          const phrase = `${word1} ${word2}`;
+          const existing = phrases.find(p => p.phrase === phrase);
+          if (existing) {
+            existing.frequency++;
+          } else {
+            phrases.push({ phrase, frequency: 1, words: 2 });
+          }
+        }
+      }
+      
+      // 3-word phrases (trigrams)
+      for (let i = 0; i < tokens.length - 2; i++) {
+        const word1 = tokens[i].match(/^[a-z]{3,}$/)?.[0];
+        const word2 = tokens[i + 1].match(/^[a-z]{3,}$/)?.[0];
+        const word3 = tokens[i + 2].match(/^[a-z]{3,}$/)?.[0];
+        
+        if (word1 && word2 && word3 && 
+            !stopWords.has(word1) && !stopWords.has(word2) && !stopWords.has(word3)) {
+          const phrase = `${word1} ${word2} ${word3}`;
+          const existing = phrases.find(p => p.phrase === phrase);
+          if (existing) {
+            existing.frequency++;
+          } else {
+            phrases.push({ phrase, frequency: 1, words: 3 });
+          }
+        }
+      }
+    }
+    
+    // Combine single words and phrases
+    const singleWordResults = Object.entries(useTFIDF ? tfIdfScores : wordFrequency)
+      .map(([word, score]) => ({ keyword: word, score, type: 'word' }))
+      .sort((a, b) => b.score - a.score);
+    
+    const phraseResults = phrases
+      .filter(p => p.frequency >= 2) // Only phrases that appear at least twice
+      .map(p => ({ 
+        keyword: p.phrase, 
+        score: p.frequency * p.words * 2, // Weight by phrase length and frequency
+        type: 'phrase' 
+      }))
+      .sort((a, b) => b.score - a.score);
+    
+    // Merge and return top keywords (prioritize phrases, then words)
+    const topPhrases = phraseResults.slice(0, Math.floor(maxKeywords / 3));
+    const topWords = singleWordResults.slice(0, maxKeywords - topPhrases.length);
+    
+    return [...topPhrases, ...topWords]
+      .sort((a, b) => b.score - a.score)
+      .slice(0, maxKeywords)
+      .map(item => item.keyword);
   },
   
-  _extractEntities: (content) => {
-    // Simple entity extraction (in production, use NLP libraries)
+  _extractEntities: (content, options = {}) => {
+    const { includePrices = true, includeDates = true, includeUrls = true } = options;
+    
     const entities = {
-      people: content.match(/\b[A-Z][a-z]+ [A-Z][a-z]+\b/g) || [],
-      places: content.match(/\b[A-Z][a-z]+(?:, [A-Z][a-z]+)*\b/g) || [],
-      organizations: content.match(/\b[A-Z][a-z]+ (?:Inc|Corp|LLC|Ltd)\b/g) || []
+      people: [],
+      places: [],
+      organizations: [],
+      prices: [],
+      dates: [],
+      emails: [],
+      phones: [],
+      urls: []
     };
+    
+    // Enhanced people detection (2-3 word names with proper capitalization)
+    const peopleMatches = content.match(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,2}\b/g) || [];
+    entities.people = [...new Set(peopleMatches)]; // Remove duplicates
+    
+    // Enhanced organizations (with common suffixes and patterns)
+    const orgPatterns = [
+      /\b[A-Z][a-zA-Z]*(?:\s+[A-Z][a-zA-Z]*)*\s+(?:Inc|Corp|Corporation|LLC|Ltd|Limited|Company|Co|Group|Holdings|Partners|Associates|Solutions|Systems|Technologies|Tech|Software|Industries|Enterprises)\b/g,
+      /\b(?:The\s+)?[A-Z][a-zA-Z]*(?:\s+[A-Z][a-zA-Z]*){1,3}\s+(?:Bank|Hospital|University|College|Institute|Foundation|Association|Agency|Department)\b/g
+    ];
+    
+    orgPatterns.forEach(pattern => {
+      const matches = content.match(pattern) || [];
+      entities.organizations.push(...matches);
+    });
+    entities.organizations = [...new Set(entities.organizations)];
+    
+    // Places detection (cities, states, countries, addresses)
+    const placePatterns = [
+      /\b[A-Z][a-z]+(?:,\s+[A-Z]{2})\b/g, // City, ST format
+      /\b\d+\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*\s+(?:Street|St|Avenue|Ave|Road|Rd|Boulevard|Blvd|Lane|Ln|Drive|Dr|Way|Court|Ct)\b/g // Street addresses
+    ];
+    
+    placePatterns.forEach(pattern => {
+      const matches = content.match(pattern) || [];
+      entities.places.push(...matches);
+    });
+    entities.places = [...new Set(entities.places)];
+    
+    // Price detection (v1.11.0 enhancement)
+    if (includePrices) {
+      const pricePatterns = [
+        /\$\d+(?:,\d{3})*(?:\.\d{2})?/g, // $1,234.56
+        /\d+(?:,\d{3})*(?:\.\d{2})?\s*(?:USD|EUR|GBP|CAD|AUD)/gi, // 1234.56 USD
+        /(?:USD|EUR|GBP|CAD|AUD)\s*\d+(?:,\d{3})*(?:\.\d{2})?/gi, // USD 1234.56
+        /\d+(?:,\d{3})*(?:\.\d{2})?\s*dollars?/gi // 1234.56 dollars
+      ];
+      
+      pricePatterns.forEach(pattern => {
+        const matches = content.match(pattern) || [];
+        entities.prices.push(...matches.map(p => p.trim()));
+      });
+      entities.prices = [...new Set(entities.prices)];
+    }
+    
+    // Date detection (v1.11.0 enhancement)
+    if (includeDates) {
+      const datePatterns = [
+        /\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+\d{4}\b/gi, // January 15, 2024
+        /\b\d{1,2}\/\d{1,2}\/\d{2,4}\b/g, // 01/15/2024
+        /\b\d{4}-\d{2}-\d{2}\b/g, // 2024-01-15 (ISO format)
+        /\b\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{4}\b/gi // 15 Jan 2024
+      ];
+      
+      datePatterns.forEach(pattern => {
+        const matches = content.match(pattern) || [];
+        entities.dates.push(...matches);
+      });
+      entities.dates = [...new Set(entities.dates)];
+    }
+    
+    // Email detection
+    const emailPattern = /\b[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}\b/g;
+    entities.emails = [...new Set(content.match(emailPattern) || [])];
+    
+    // Phone detection (various formats)
+    const phonePatterns = [
+      /\b\d{3}[-.]?\d{3}[-.]?\d{4}\b/g, // 123-456-7890 or 1234567890
+      /\b\(\d{3}\)\s*\d{3}[-.]?\d{4}\b/g, // (123) 456-7890
+      /\b\+\d{1,3}\s*\d{3}[-.]?\d{3}[-.]?\d{4}\b/g // +1 123-456-7890
+    ];
+    
+    phonePatterns.forEach(pattern => {
+      const matches = content.match(pattern) || [];
+      entities.phones.push(...matches);
+    });
+    entities.phones = [...new Set(entities.phones)];
+    
+    // URL detection (v1.11.0 enhancement)
+    if (includeUrls) {
+      const urlPattern = /https?:\/\/(?:www\.)?[-a-zA-Z0-9@:%._+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b(?:[-a-zA-Z0-9()@:%_+.~#?&/=]*)/gi;
+      entities.urls = [...new Set(content.match(urlPattern) || [])];
+    }
+    
+    // Remove empty arrays for cleaner output
+    Object.keys(entities).forEach(key => {
+      if (entities[key].length === 0) {
+        delete entities[key];
+      }
+    });
     
     return entities;
   },
@@ -4308,3 +4911,2874 @@ export const EnhancedValidation = {
     return Math.max(0, Math.round(score));
   }
 };
+
+// ========================================
+// V1.9.0 NEW FEATURES - Intelligence & Automation Revolution
+// ========================================
+
+/**
+ * Autonomous Schema Management System
+ * 🚀 80% Less Manual Work: Autonomous schema management
+ */
+export class AutonomousSchemaManager {
+  constructor(options = {}) {
+    this.options = {
+      autoDiscovery: true,
+      autoUpdates: true,
+      healthMonitoring: true,
+      learningMode: true,
+      updateInterval: 30000, // 30 seconds
+      maxSchemas: 100,
+      ...options
+    };
+    
+    this.discoveredSchemas = new Map();
+    this.managedSchemas = new Map();
+    this.schemaHistory = new Map();
+    this.learningData = new Map();
+    this.healthChecks = new Map();
+    this.isRunning = false;
+    this.intervals = [];
+    
+    // Initialize if auto-start enabled
+    if (this.options.autoDiscovery) {
+      this.start();
+    }
+  }
+
+  /**
+   * Start autonomous management
+   */
+  start() {
+    if (this.isRunning) return;
+    
+    this.isRunning = true;
+    
+    // Auto-discovery interval
+    if (this.options.autoDiscovery) {
+      const discoveryInterval = setInterval(() => {
+        this.discoverSchemas();
+      }, this.options.updateInterval);
+      this.intervals.push(discoveryInterval);
+    }
+    
+    // Health monitoring interval
+    if (this.options.healthMonitoring) {
+      const healthInterval = setInterval(() => {
+        this.performHealthChecks();
+      }, this.options.updateInterval * 2);
+      this.intervals.push(healthInterval);
+    }
+    
+    // Learning and optimization interval
+    if (this.options.learningMode) {
+      const learningInterval = setInterval(() => {
+        this.optimizeBasedOnLearning();
+      }, this.options.updateInterval * 5);
+      this.intervals.push(learningInterval);
+    }
+    
+    debugLog('🤖 Autonomous Schema Manager started', 'info', this.options.debug);
+  }
+
+  /**
+   * Stop autonomous management
+   */
+  stop() {
+    this.isRunning = false;
+    this.intervals.forEach(interval => clearInterval(interval));
+    this.intervals = [];
+    debugLog('🤖 Autonomous Schema Manager stopped', 'info', this.options.debug);
+  }
+
+  /**
+   * Discover schemas from page content automatically
+   */
+  async discoverSchemas() {
+    if (typeof document === 'undefined') return;
+    
+    try {
+      const discoveries = [];
+      
+      // Discover from existing JSON-LD scripts
+      const existingSchemas = document.querySelectorAll('script[type="application/ld+json"]');
+      existingSchemas.forEach((script, index) => {
+        try {
+          const schema = JSON.parse(script.textContent);
+          const id = `discovered-${index}-${Date.now()}`;
+          discoveries.push({ id, schema, source: 'existing-jsonld', element: script });
+        } catch (e) {
+          // Skip invalid JSON-LD
+        }
+      });
+      
+      // Discover from page content using AI
+      const contentDiscoveries = await this.discoverFromContent();
+      discoveries.push(...contentDiscoveries);
+      
+      // Process discoveries
+      for (const discovery of discoveries) {
+        await this.processDiscovery(discovery);
+      }
+      
+      if (discoveries.length > 0 && this.options.debug) {
+        debugLog(`🔍 Discovered ${discoveries.length} potential schemas`, 'info', true);
+      }
+      
+    } catch (error) {
+      debugLog(`Schema discovery error: ${error.message}`, 'warn', this.options.debug);
+    }
+  }
+
+  /**
+   * Discover schemas from page content using AI analysis
+   */
+  async discoverFromContent() {
+    const discoveries = [];
+    
+    try {
+      // Get page content
+      const pageContent = this.extractPageContent();
+      
+      // Use AI to analyze content and suggest schemas
+      const aiSuggestions = AI.analyzeContent(pageContent, {
+        includeKeywords: true,
+        includeEntities: true,
+        autoGenerate: true
+      });
+      
+      if (aiSuggestions && aiSuggestions.recommendedType) {
+        const suggestedSchema = await AI.generateFromContent(pageContent, {
+          confidence: 0.7,
+          targetType: aiSuggestions.recommendedType
+        });
+        
+        if (suggestedSchema && suggestedSchema.schema) {
+          discoveries.push({
+            id: `ai-generated-${Date.now()}`,
+            schema: suggestedSchema.schema,
+            source: 'ai-content-analysis',
+            confidence: suggestedSchema.confidence,
+            metadata: {
+              detectedType: aiSuggestions.recommendedType,
+              keywords: aiSuggestions.keywords,
+              entities: aiSuggestions.entities
+            }
+          });
+        }
+      }
+      
+    } catch (error) {
+      debugLog(`AI content discovery error: ${error.message}`, 'warn', this.options.debug);
+    }
+    
+    return discoveries;
+  }
+
+  /**
+   * Extract meaningful content from the page
+   */
+  extractPageContent() {
+    if (typeof document === 'undefined') return '';
+    
+    const content = [];
+    
+    // Extract title
+    const title = document.title;
+    if (title) content.push(title);
+    
+    // Extract meta description
+    const metaDesc = document.querySelector('meta[name="description"]');
+    if (metaDesc) content.push(metaDesc.content);
+    
+    // Extract main headings
+    const headings = document.querySelectorAll('h1, h2, h3');
+    headings.forEach(h => content.push(h.textContent.trim()));
+    
+    // Extract main content (try to find main content area)
+    const mainSelectors = ['main', '[role="main"]', '.main-content', '#content', '.content'];
+    let mainContent = '';
+    
+    for (const selector of mainSelectors) {
+      const element = document.querySelector(selector);
+      if (element) {
+        mainContent = element.textContent.trim();
+        break;
+      }
+    }
+    
+    if (!mainContent) {
+      // Fallback: get all paragraph text
+      const paragraphs = document.querySelectorAll('p');
+      mainContent = Array.from(paragraphs)
+        .map(p => p.textContent.trim())
+        .filter(text => text.length > 50)
+        .slice(0, 5)
+        .join(' ');
+    }
+    
+    content.push(mainContent);
+    
+    return content.join(' ').substring(0, 2000); // Limit content length
+  }
+
+  /**
+   * Process a discovered schema
+   */
+  async processDiscovery(discovery) {
+    const { id, schema, confidence = 1.0 } = discovery;
+    
+    // Check if we already know about this schema
+    if (this.discoveredSchemas.has(id)) return;
+    
+    // Validate the schema
+    const validation = validateSchemaEnhanced(schema);
+    
+    // Only process high-quality schemas
+    if (validation.score >= 60) {
+      this.discoveredSchemas.set(id, {
+        ...discovery,
+        discoveredAt: Date.now(),
+        validation,
+        status: 'discovered'
+      });
+      
+      // Auto-manage if confidence is high enough
+      if (confidence >= 0.8 && this.options.autoUpdates) {
+        await this.manageSchema(id);
+      }
+    }
+  }
+
+  /**
+   * Start managing a discovered schema
+   */
+  async manageSchema(schemaId) {
+    const discovery = this.discoveredSchemas.get(schemaId);
+    if (!discovery) return;
+    
+    try {
+      // Optimize the schema
+      const optimizedSchema = AI.optimizeForLLM(discovery.schema, {
+        target: ['chatgpt', 'bard', 'claude'],
+        semanticEnhancement: true,
+        voiceOptimization: true
+      });
+      
+      // Create managed schema entry
+      const managedSchema = {
+        id: schemaId,
+        originalSchema: discovery.schema,
+        optimizedSchema,
+        source: discovery.source,
+        managedAt: Date.now(),
+        lastUpdated: Date.now(),
+        updateCount: 0,
+        performance: {
+          injectionTime: 0,
+          validationScore: discovery.validation.score,
+          optimizationApplied: true
+        }
+      };
+      
+      this.managedSchemas.set(schemaId, managedSchema);
+      
+      // Inject the optimized schema
+      const injectionResult = initSEO({
+        schema: optimizedSchema,
+        id: `auto-managed-${schemaId}`,
+        validate: false // Already validated
+      });
+      
+      if (injectionResult) {
+        managedSchema.performance.injectionTime = injectionResult.injectionTime || 0;
+        if (this.options.debug) {
+          debugLog(`✅ Auto-managed schema: ${discovery.schema['@type']}`, 'info', true);
+        }
+      }
+      
+      // Record learning data
+      this.recordLearningData(schemaId, 'auto-managed', managedSchema);
+      
+    } catch (error) {
+      debugLog(`Failed to manage schema ${schemaId}: ${error.message}`, 'warn', this.options.debug);
+    }
+  }
+
+  /**
+   * Perform health checks on managed schemas
+   */
+  async performHealthChecks() {
+    for (const [schemaId, managedSchema] of this.managedSchemas) {
+      try {
+        const healthCheck = {
+          timestamp: Date.now(),
+          schemaId,
+          checks: {}
+        };
+        
+        // Check if schema is still present in DOM
+        const element = document.getElementById(`auto-managed-${schemaId}`);
+        healthCheck.checks.domPresence = !!element;
+        
+        // Validate current schema
+        const validation = validateSchemaEnhanced(managedSchema.optimizedSchema);
+        healthCheck.checks.validation = {
+          score: validation.score,
+          errors: validation.errors.length,
+          warnings: validation.warnings.length
+        };
+        
+        // Check performance metrics
+        healthCheck.checks.performance = {
+          injectionTime: managedSchema.performance.injectionTime,
+          updateCount: managedSchema.updateCount
+        };
+        
+        // Overall health score
+        let healthScore = 100;
+        if (!healthCheck.checks.domPresence) healthScore -= 30;
+        if (validation.score < 80) healthScore -= 20;
+        if (managedSchema.performance.injectionTime > 100) healthScore -= 10;
+        
+        healthCheck.overallScore = Math.max(0, healthScore);
+        healthCheck.status = healthScore >= 80 ? 'healthy' : healthScore >= 60 ? 'warning' : 'critical';
+        
+        this.healthChecks.set(schemaId, healthCheck);
+        
+        // Take action if unhealthy
+        if (healthCheck.status === 'critical') {
+          await this.repairSchema(schemaId);
+        }
+        
+      } catch (error) {
+        debugLog(`Health check failed for schema ${schemaId}: ${error.message}`, 'warn', this.options.debug);
+      }
+    }
+  }
+
+  /**
+   * Repair a problematic schema
+   */
+  async repairSchema(schemaId) {
+    const managedSchema = this.managedSchemas.get(schemaId);
+    if (!managedSchema) return;
+    
+    try {
+      debugLog(`🔧 Repairing schema: ${schemaId}`, 'info', this.options.debug);
+      
+      // Remove existing schema element
+      const existingElement = document.getElementById(`auto-managed-${schemaId}`);
+      if (existingElement) {
+        existingElement.remove();
+      }
+      
+      // Re-optimize and re-inject
+      const reOptimizedSchema = AI.optimizeForLLM(managedSchema.originalSchema, {
+        target: ['chatgpt', 'bard', 'claude'],
+        semanticEnhancement: true,
+        voiceOptimization: true
+      });
+      
+      const injectionResult = initSEO({
+        schema: reOptimizedSchema,
+        id: `auto-managed-${schemaId}`,
+        validate: true
+      });
+      
+      if (injectionResult) {
+        managedSchema.optimizedSchema = reOptimizedSchema;
+        managedSchema.lastUpdated = Date.now();
+        managedSchema.updateCount += 1;
+        
+        debugLog(`✅ Schema repaired: ${schemaId}`, 'info', this.options.debug);
+        this.recordLearningData(schemaId, 'repaired', managedSchema);
+      }
+      
+    } catch (error) {
+      debugLog(`Failed to repair schema ${schemaId}: ${error.message}`, 'error', this.options.debug);
+    }
+  }
+
+  /**
+   * Optimize schemas based on learning data
+   */
+  async optimizeBasedOnLearning() {
+    if (this.learningData.size === 0) return;
+    
+    // Analyze learning patterns
+    const patterns = this.analyzeLearningPatterns();
+    
+    // Apply learned optimizations
+    for (const [schemaId, managedSchema] of this.managedSchemas) {
+      const relevantPatterns = patterns.filter(p => 
+        p.schemaType === managedSchema.optimizedSchema['@type']
+      );
+      
+      if (relevantPatterns.length > 0) {
+        await this.applyLearnedOptimizations(schemaId, relevantPatterns);
+      }
+    }
+  }
+
+  /**
+   * Analyze learning patterns from collected data
+   */
+  analyzeLearningPatterns() {
+    const patterns = [];
+    const typeGroups = new Map();
+    
+    // Group learning data by schema type
+    for (const [, data] of this.learningData) {
+      const schemaType = data.schemaType;
+      if (!typeGroups.has(schemaType)) {
+        typeGroups.set(schemaType, []);
+      }
+      typeGroups.get(schemaType).push(data);
+    }
+    
+    // Analyze each type group
+    for (const [schemaType, dataPoints] of typeGroups) {
+      const avgPerformance = dataPoints.reduce((sum, dp) => 
+        sum + dp.performance.validationScore, 0) / dataPoints.length;
+      
+      const successfulActions = dataPoints.filter(dp => 
+        dp.action === 'auto-managed' || dp.action === 'optimized'
+      );
+      
+      if (avgPerformance > 80 && successfulActions.length >= 3) {
+        patterns.push({
+          schemaType,
+          confidence: avgPerformance / 100,
+          recommendedActions: ['maintain-optimization', 'monitor-performance'],
+          dataPoints: dataPoints.length
+        });
+      }
+    }
+    
+    return patterns;
+  }
+
+  /**
+   * Apply learned optimizations to a schema
+   */
+  async applyLearnedOptimizations(schemaId, patterns) {
+    const managedSchema = this.managedSchemas.get(schemaId);
+    if (!managedSchema) return;
+    
+    // Apply optimizations based on learned patterns
+    let hasChanges = false;
+    
+    for (const pattern of patterns) {
+      if (pattern.recommendedActions.includes('maintain-optimization')) {
+        // Schema is performing well, just update timestamp
+        managedSchema.lastOptimized = Date.now();
+        hasChanges = true;
+      }
+    }
+    
+    if (hasChanges) {
+      this.recordLearningData(schemaId, 'learned-optimization', managedSchema);
+    }
+  }
+
+  /**
+   * Record learning data for future optimization
+   */
+  recordLearningData(schemaId, action, managedSchema) {
+    const learningEntry = {
+      schemaId,
+      schemaType: managedSchema.optimizedSchema['@type'],
+      action,
+      timestamp: Date.now(),
+      performance: { ...managedSchema.performance },
+      metadata: {
+        source: managedSchema.source,
+        updateCount: managedSchema.updateCount
+      }
+    };
+    
+    this.learningData.set(`${schemaId}-${Date.now()}`, learningEntry);
+    
+    // Limit learning data size
+    if (this.learningData.size > 1000) {
+      const oldestKey = Array.from(this.learningData.keys())[0];
+      this.learningData.delete(oldestKey);
+    }
+  }
+
+  /**
+   * Get management statistics
+   */
+  getStats() {
+    const stats = {
+      discovered: this.discoveredSchemas.size,
+      managed: this.managedSchemas.size,
+      learningDataPoints: this.learningData.size,
+      isRunning: this.isRunning,
+      healthySchemas: 0,
+      warningSchemas: 0,
+      criticalSchemas: 0
+    };
+    
+    // Count health statuses
+    for (const [, healthCheck] of this.healthChecks) {
+      if (healthCheck.status === 'healthy') stats.healthySchemas++;
+      else if (healthCheck.status === 'warning') stats.warningSchemas++;
+      else if (healthCheck.status === 'critical') stats.criticalSchemas++;
+    }
+    
+    return stats;
+  }
+
+  /**
+   * Get detailed report
+   */
+  getReport() {
+    return {
+      stats: this.getStats(),
+      discoveredSchemas: Array.from(this.discoveredSchemas.values()),
+      managedSchemas: Array.from(this.managedSchemas.values()),
+      healthChecks: Array.from(this.healthChecks.values()),
+      recentLearning: Array.from(this.learningData.values()).slice(-10)
+    };
+  }
+}
+
+/**
+ * AI Context Engine - Context-aware suggestions
+ * 🧠 AI-Powered Intelligence: Context-aware suggestions
+ */
+export class AIContextEngine {
+  constructor(options = {}) {
+    this.options = {
+      learningEnabled: true,
+      contextDepth: 'deep', // 'shallow', 'medium', 'deep'
+      suggestionThreshold: 0.7,
+      maxSuggestions: 5,
+      ...options
+    };
+    
+    this.contextHistory = new Map();
+    this.userPreferences = new Map();
+    this.suggestionCache = new Map();
+    this.performanceMetrics = {
+      totalSuggestions: 0,
+      acceptedSuggestions: 0,
+      rejectedSuggestions: 0,
+      averageConfidence: 0
+    };
+  }
+
+  /**
+   * Analyze context and provide intelligent suggestions
+   */
+  async analyzeContext(input, options = {}) {
+    const context = await this.buildContext(input, options);
+    const suggestions = await this.generateContextualSuggestions(context);
+    
+    // Cache suggestions for performance
+    const cacheKey = this.generateCacheKey(input, options);
+    this.suggestionCache.set(cacheKey, {
+      suggestions,
+      timestamp: Date.now(),
+      context
+    });
+    
+    // Update metrics
+    this.performanceMetrics.totalSuggestions += suggestions.length;
+    if (suggestions.length > 0) {
+      const avgConfidence = suggestions.reduce((sum, s) => sum + s.confidence, 0) / suggestions.length;
+      this.performanceMetrics.averageConfidence = 
+        (this.performanceMetrics.averageConfidence + avgConfidence) / 2;
+    }
+    
+    return {
+      context,
+      suggestions,
+      metadata: {
+        analysisTime: Date.now(),
+        confidenceScore: suggestions.length > 0 ? Math.max(...suggestions.map(s => s.confidence)) : 0,
+        contextDepth: this.options.contextDepth
+      }
+    };
+  }
+
+  /**
+   * Build comprehensive context from input
+   */
+  async buildContext(input) {
+    const context = {
+      input,
+      type: this.detectInputType(input),
+      timestamp: Date.now(),
+      pageContext: {},
+      userContext: {},
+      historicalContext: {},
+      semanticContext: {}
+    };
+    
+    // Analyze page context
+    if (typeof document !== 'undefined') {
+      context.pageContext = this.analyzePageContext();
+    }
+    
+    // Analyze user context from preferences
+    context.userContext = this.analyzeUserContext();
+    
+    // Analyze historical context
+    context.historicalContext = this.analyzeHistoricalContext(input);
+    
+    // Analyze semantic context using AI
+    if (typeof input === 'string' && input.length > 10) {
+      context.semanticContext = await this.analyzeSemanticContext(input);
+    }
+    
+    return context;
+  }
+
+  /**
+   * Detect the type of input being analyzed
+   */
+  detectInputType(input) {
+    if (typeof input === 'object' && input['@type']) {
+      return 'schema';
+    } else if (typeof input === 'string') {
+      if (input.startsWith('http')) {
+        return 'url';
+      } else if (input.length > 100) {
+        return 'content';
+      } else {
+        return 'query';
+      }
+    } else if (typeof input === 'object') {
+      return 'data';
+    }
+    return 'unknown';
+  }
+
+  /**
+   * Analyze current page context
+   */
+  analyzePageContext() {
+    const pageContext = {
+      title: document.title || '',
+      url: window.location.href,
+      domain: window.location.hostname,
+      path: window.location.pathname,
+      existingSchemas: [],
+      contentType: 'unknown',
+      language: document.documentElement.lang || 'en'
+    };
+    
+    // Detect existing schemas
+    const existingSchemas = document.querySelectorAll('script[type="application/ld+json"]');
+    existingSchemas.forEach(script => {
+      try {
+        const schema = JSON.parse(script.textContent);
+        pageContext.existingSchemas.push(schema['@type'] || 'Unknown');
+      } catch (e) {
+        // Skip invalid schemas
+      }
+    });
+    
+    // Detect content type
+    pageContext.contentType = this.detectContentType();
+    
+    return pageContext;
+  }
+
+  /**
+   * Detect the type of content on the page
+   */
+  detectContentType() {
+    const indicators = {
+      'e-commerce': ['.product', '.price', '.add-to-cart', '[data-product]'],
+      'blog': ['article', '.post', '.blog-post', '.entry'],
+      'business': ['.contact', '.about', '.services', '.location'],
+      'event': ['.event', '.calendar', '.date', '.venue'],
+      'recipe': ['.recipe', '.ingredients', '.instructions', '.cooking-time']
+    };
+    
+    for (const [type, selectors] of Object.entries(indicators)) {
+      for (const selector of selectors) {
+        if (document.querySelector(selector)) {
+          return type;
+        }
+      }
+    }
+    
+    return 'general';
+  }
+
+  /**
+   * Analyze user context from preferences and history
+   */
+  analyzeUserContext() {
+    const userContext = {
+      preferences: {},
+      recentActions: [],
+      skillLevel: 'intermediate' // beginner, intermediate, advanced
+    };
+    
+    // Get user preferences
+    for (const [key, value] of this.userPreferences) {
+      userContext.preferences[key] = value;
+    }
+    
+    // Get recent context history
+    const recentHistory = Array.from(this.contextHistory.values())
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .slice(0, 10);
+    
+    userContext.recentActions = recentHistory.map(h => ({
+      action: h.action,
+      schemaType: h.schemaType,
+      timestamp: h.timestamp
+    }));
+    
+    return userContext;
+  }
+
+  /**
+   * Analyze historical context
+   */
+  analyzeHistoricalContext(input) {
+    const inputHash = this.hashInput(input);
+    const relatedHistory = [];
+    
+    // Find related historical context
+    for (const [, context] of this.contextHistory) {
+      if (context.inputHash === inputHash || 
+          this.calculateSimilarity(context.input, input) > 0.7) {
+        relatedHistory.push(context);
+      }
+    }
+    
+    return {
+      relatedContexts: relatedHistory.length,
+      patterns: this.identifyPatterns(relatedHistory),
+      lastSimilarContext: relatedHistory.length > 0 ? relatedHistory[0].timestamp : null
+    };
+  }
+
+  /**
+   * Analyze semantic context using AI
+   */
+  async analyzeSemanticContext(text) {
+    try {
+      // Use existing AI analysis
+      const analysis = AI.analyzeContent(text, {
+        includeKeywords: true,
+        includeEntities: true,
+        includeSentiment: true
+      });
+      
+      return {
+        keywords: analysis.keywords || [],
+        entities: analysis.entities || {},
+        sentiment: analysis.sentiment || { label: 'neutral', score: 0.5 },
+        topics: analysis.topics || [],
+        complexity: this.calculateTextComplexity(text)
+      };
+    } catch (error) {
+      return {
+        keywords: [],
+        entities: {},
+        sentiment: { label: 'neutral', score: 0.5 },
+        topics: [],
+        complexity: 'medium'
+      };
+    }
+  }
+
+  /**
+   * Generate contextual suggestions based on analysis
+   */
+  async generateContextualSuggestions(context) {
+    const suggestions = [];
+    
+    // Schema-specific suggestions
+    if (context.type === 'schema') {
+      suggestions.push(...await this.generateSchemaSuggestions(context));
+    }
+    
+    // Content-specific suggestions
+    if (context.type === 'content') {
+      suggestions.push(...await this.generateContentSuggestions(context));
+    }
+    
+    // Context-aware suggestions
+    suggestions.push(...await this.generateContextAwareSuggestions(context));
+    
+    // Filter and rank suggestions
+    const filteredSuggestions = suggestions
+      .filter(s => s.confidence >= this.options.suggestionThreshold)
+      .sort((a, b) => b.confidence - a.confidence)
+      .slice(0, this.options.maxSuggestions);
+    
+    return filteredSuggestions;
+  }
+
+  /**
+   * Generate schema-specific suggestions
+   */
+  async generateSchemaSuggestions(context) {
+    const suggestions = [];
+    const schema = context.input;
+    
+    // Missing property suggestions
+    const schemaType = schema['@type'];
+    const expectedProperties = this.getExpectedProperties(schemaType);
+    
+    for (const prop of expectedProperties) {
+      if (!schema[prop.name]) {
+        suggestions.push({
+          type: 'missing-property',
+          title: `Add ${prop.name}`,
+          description: prop.description,
+          confidence: prop.importance,
+          action: 'add-property',
+          data: { property: prop.name, value: prop.defaultValue }
+        });
+      }
+    }
+    
+    // Optimization suggestions
+    const optimizationSuggestions = await this.generateOptimizationSuggestions(schema, context);
+    suggestions.push(...optimizationSuggestions);
+    
+    return suggestions;
+  }
+
+  /**
+   * Generate content-specific suggestions
+   */
+  async generateContentSuggestions(context) {
+    const suggestions = [];
+    const content = context.input;
+    
+    // Suggest schema types based on content
+    const suggestedTypes = await this.suggestSchemaTypes(content, context);
+    
+    for (const type of suggestedTypes) {
+      suggestions.push({
+        type: 'schema-generation',
+        title: `Create ${type.name} Schema`,
+        description: `Generate a ${type.name} schema based on the content`,
+        confidence: type.confidence,
+        action: 'generate-schema',
+        data: { schemaType: type.name, content }
+      });
+    }
+    
+    return suggestions;
+  }
+
+  /**
+   * Generate context-aware suggestions
+   */
+  async generateContextAwareSuggestions(context) {
+    const suggestions = [];
+    
+    // Page context suggestions
+    if (context.pageContext.contentType !== 'unknown') {
+      const contentType = context.pageContext.contentType;
+      const templateSuggestions = this.getTemplateSuggestions(contentType);
+      
+      suggestions.push(...templateSuggestions.map(template => ({
+        type: 'template-suggestion',
+        title: `Use ${template.name} Template`,
+        description: template.description,
+        confidence: 0.8,
+        action: 'apply-template',
+        data: { template: template.id, contentType }
+      })));
+    }
+    
+    // User preference suggestions
+    const prefSuggestions = this.generatePreferenceSuggestions(context);
+    suggestions.push(...prefSuggestions);
+    
+    return suggestions;
+  }
+
+  /**
+   * Get expected properties for a schema type
+   */
+  getExpectedProperties(schemaType) {
+    const propertyMap = {
+      'Product': [
+        { name: 'name', importance: 0.95, description: 'Product name', defaultValue: '' },
+        { name: 'brand', importance: 0.85, description: 'Product brand', defaultValue: '' },
+        { name: 'offers', importance: 0.90, description: 'Product pricing', defaultValue: {} },
+        { name: 'image', importance: 0.80, description: 'Product images', defaultValue: [] }
+      ],
+      'Article': [
+        { name: 'headline', importance: 0.95, description: 'Article headline', defaultValue: '' },
+        { name: 'author', importance: 0.90, description: 'Article author', defaultValue: '' },
+        { name: 'datePublished', importance: 0.85, description: 'Publication date', defaultValue: '' }
+      ],
+      'LocalBusiness': [
+        { name: 'name', importance: 0.95, description: 'Business name', defaultValue: '' },
+        { name: 'address', importance: 0.90, description: 'Business address', defaultValue: {} },
+        { name: 'telephone', importance: 0.85, description: 'Phone number', defaultValue: '' }
+      ]
+    };
+    
+    return propertyMap[schemaType] || [];
+  }
+
+  /**
+   * Record user feedback on suggestions
+   */
+  recordFeedback(suggestionId, action, metadata = {}) {
+    if (action === 'accepted') {
+      this.performanceMetrics.acceptedSuggestions++;
+    } else if (action === 'rejected') {
+      this.performanceMetrics.rejectedSuggestions++;
+    }
+    
+    // Update user preferences based on feedback
+    if (this.options.learningEnabled) {
+      this.updateUserPreferences(suggestionId, action, metadata);
+    }
+    
+    // Store in context history
+    this.contextHistory.set(`feedback-${Date.now()}`, {
+      type: 'feedback',
+      suggestionId,
+      action,
+      metadata,
+      timestamp: Date.now()
+    });
+  }
+
+  /**
+   * Update user preferences based on feedback
+   */
+  updateUserPreferences(suggestionId, action, metadata) {
+    // This would implement machine learning logic to update preferences
+    // For now, simple preference tracking
+    
+    if (metadata.schemaType) {
+      const prefKey = `preferred_${metadata.schemaType}_suggestions`;
+      const currentPref = this.userPreferences.get(prefKey) || 0;
+      
+      if (action === 'accepted') {
+        this.userPreferences.set(prefKey, Math.min(1.0, currentPref + 0.1));
+      } else if (action === 'rejected') {
+        this.userPreferences.set(prefKey, Math.max(0.0, currentPref - 0.05));
+      }
+    }
+  }
+
+  /**
+   * Get performance metrics
+   */
+  getMetrics() {
+    const acceptanceRate = this.performanceMetrics.totalSuggestions > 0 
+      ? this.performanceMetrics.acceptedSuggestions / this.performanceMetrics.totalSuggestions 
+      : 0;
+    
+    return {
+      ...this.performanceMetrics,
+      acceptanceRate: Math.round(acceptanceRate * 100),
+      cacheSize: this.suggestionCache.size,
+      userPreferences: this.userPreferences.size,
+      contextHistory: this.contextHistory.size
+    };
+  }
+
+  /**
+   * Utility methods
+   */
+  hashInput(input) {
+    return JSON.stringify(input).split('').reduce((a, b) => {
+      a = ((a << 5) - a) + b.charCodeAt(0);
+      return a & a;
+    }, 0).toString(36);
+  }
+
+  calculateSimilarity(input1, input2) {
+    // Simple similarity calculation - in production, use more sophisticated methods
+    const str1 = JSON.stringify(input1).toLowerCase();
+    const str2 = JSON.stringify(input2).toLowerCase();
+    
+    const longer = str1.length > str2.length ? str1 : str2;
+    const shorter = str1.length > str2.length ? str2 : str1;
+    
+    if (longer.length === 0) return 1.0;
+    
+    const editDistance = this.levenshteinDistance(longer, shorter);
+    return (longer.length - editDistance) / longer.length;
+  }
+
+  levenshteinDistance(str1, str2) {
+    const matrix = [];
+    
+    for (let i = 0; i <= str2.length; i++) {
+      matrix[i] = [i];
+    }
+    
+    for (let j = 0; j <= str1.length; j++) {
+      matrix[0][j] = j;
+    }
+    
+    for (let i = 1; i <= str2.length; i++) {
+      for (let j = 1; j <= str1.length; j++) {
+        if (str2.charAt(i - 1) === str1.charAt(j - 1)) {
+          matrix[i][j] = matrix[i - 1][j - 1];
+        } else {
+          matrix[i][j] = Math.min(
+            matrix[i - 1][j - 1] + 1,
+            matrix[i][j - 1] + 1,
+            matrix[i - 1][j] + 1
+          );
+        }
+      }
+    }
+    
+    return matrix[str2.length][str1.length];
+  }
+
+  calculateTextComplexity(text) {
+    const words = text.split(/\s+/).length;
+    const sentences = text.split(/[.!?]+/).length;
+    const avgWordsPerSentence = words / sentences;
+    
+    if (avgWordsPerSentence < 10) return 'simple';
+    if (avgWordsPerSentence < 20) return 'medium';
+    return 'complex';
+  }
+
+  identifyPatterns(history) {
+    // Simple pattern identification
+    const patterns = {
+      frequentTypes: {},
+      commonActions: {},
+      timePatterns: {}
+    };
+    
+    history.forEach(h => {
+      if (h.schemaType) {
+        patterns.frequentTypes[h.schemaType] = (patterns.frequentTypes[h.schemaType] || 0) + 1;
+      }
+      if (h.action) {
+        patterns.commonActions[h.action] = (patterns.commonActions[h.action] || 0) + 1;
+      }
+    });
+    
+    return patterns;
+  }
+
+  generateCacheKey(input, options) {
+    return this.hashInput({ input, options });
+  }
+
+  async suggestSchemaTypes(content) {
+    // Use existing AI analysis to suggest schema types
+    try {
+      const analysis = AI.analyzeContent(content);
+      return [{
+        name: analysis.recommendedType || 'Article',
+        confidence: analysis.confidence || 0.7
+      }];
+    } catch (error) {
+      return [{ name: 'Article', confidence: 0.5 }];
+    }
+  }
+
+  getTemplateSuggestions(contentType) {
+    const templates = {
+      'e-commerce': [
+        { id: 'product-page', name: 'Product Page', description: 'Complete product schema with offers and reviews' }
+      ],
+      'blog': [
+        { id: 'blog-post', name: 'Blog Post', description: 'Article schema with author and publication info' }
+      ],
+      'business': [
+        { id: 'local-business', name: 'Local Business', description: 'Business listing with contact and location' }
+      ]
+    };
+    
+    return templates[contentType] || [];
+  }
+
+  generatePreferenceSuggestions() {
+    const suggestions = [];
+    
+    // Generate suggestions based on user preferences
+    for (const [prefKey, prefValue] of this.userPreferences) {
+      if (prefValue > 0.7 && prefKey.includes('preferred_')) {
+        const schemaType = prefKey.replace('preferred_', '').replace('_suggestions', '');
+        suggestions.push({
+          type: 'preference-based',
+          title: `Create ${schemaType} Schema`,
+          description: `Based on your preferences for ${schemaType} schemas`,
+          confidence: prefValue,
+          action: 'create-preferred-schema',
+          data: { schemaType }
+        });
+      }
+    }
+    
+    return suggestions;
+  }
+
+  async generateOptimizationSuggestions(schema) {
+    const suggestions = [];
+    
+    // AI optimization suggestion
+    suggestions.push({
+      type: 'ai-optimization',
+      title: 'AI Optimize Schema',
+      description: 'Optimize schema for better LLM understanding',
+      confidence: 0.9,
+      action: 'ai-optimize',
+      data: { schema }
+    });
+    
+    return suggestions;
+  }
+}
+
+// ========================================
+// V1.10.0 NEW FEATURES - AI Search Engine Revolution
+// ========================================
+
+/**
+ * AI Search Engines Optimization System
+ * 🔍 Core Theme: Future-Ready AI Search
+ */
+export class AISearchEngines {
+  constructor() {
+    this.optimizers = new Map();
+    this.analytics = new Map();
+    this.config = {
+      defaultTargets: ['chatgpt', 'bard', 'perplexity', 'voice'],
+      adaptiveOptimization: true,
+      realTimeUpdates: true,
+      performanceTracking: true
+    };
+    
+    // Register available optimizers
+    this.registerOptimizers();
+  }
+
+  /**
+   * Register all available AI search engine optimizers
+   */
+  registerOptimizers() {
+    this.optimizers.set('chatgpt', new ChatGPTOptimizer());
+    this.optimizers.set('bard', new BardOptimizer());
+    this.optimizers.set('perplexity', new PerplexityOptimizer());
+    this.optimizers.set('voice', new VoiceSearchOptimizer());
+    this.optimizers.set('visual', new VisualSearchOptimizer());
+  }
+
+  /**
+   * Optimize schema for all AI search engines
+   */
+  async optimizeForAll(schema, options = {}) {
+    const targets = options.targets || this.config.defaultTargets;
+    const optimizedSchemas = {};
+    const startTime = performance.now();
+
+    try {
+      // Parallel optimization for all targets
+      const optimizationPromises = targets.map(async (target) => {
+        const optimizer = this.optimizers.get(target);
+        if (!optimizer) {
+          debugLog(`Optimizer not found for target: ${target}`, 'warn', options.debug || false);
+          return { target, schema: null, error: 'Optimizer not available' };
+        }
+
+        try {
+          const optimized = await optimizer.optimize(schema, options);
+          return { target, schema: optimized, success: true };
+        } catch (error) {
+          return { target, schema: null, error: error.message };
+        }
+      });
+
+      const results = await Promise.all(optimizationPromises);
+      
+      // Process results
+      results.forEach(result => {
+        if (result.success) {
+          optimizedSchemas[result.target] = result.schema;
+        } else {
+          debugLog(`Optimization failed for ${result.target}: ${result.error}`, 'warn', options.debug || false);
+          optimizedSchemas[result.target] = { error: result.error };
+        }
+      });
+
+      // Track performance
+      const processingTime = performance.now() - startTime;
+      this.trackOptimization(schema, optimizedSchemas, processingTime, options);
+
+      return {
+        original: schema,
+        optimized: optimizedSchemas,
+        metadata: {
+          processingTime,
+          targets,
+          timestamp: Date.now(),
+          success: Object.keys(optimizedSchemas).length > 0
+        }
+      };
+
+    } catch (error) {
+      debugLog(`AI search optimization failed: ${error.message}`, 'error', options.debug || false);
+      return {
+        original: schema,
+        optimized: {},
+        error: error.message,
+        metadata: {
+          processingTime: performance.now() - startTime,
+          targets,
+          timestamp: Date.now(),
+          success: false
+        }
+      };
+    }
+  }
+
+  /**
+   * Optimize for specific AI search engine
+   */
+  async optimizeFor(target, schema, options = {}) {
+    const optimizer = this.optimizers.get(target);
+    if (!optimizer) {
+      throw new Error(`Optimizer not found for target: ${target}`);
+    }
+
+    const startTime = performance.now();
+    const optimized = await optimizer.optimize(schema, options);
+    const processingTime = performance.now() - startTime;
+
+    this.trackOptimization(schema, { [target]: optimized }, processingTime, options);
+
+    return {
+      original: schema,
+      optimized,
+      target,
+      metadata: {
+        processingTime,
+        timestamp: Date.now(),
+        success: true
+      }
+    };
+  }
+
+  /**
+   * Deploy optimized schemas to platforms
+   */
+  async deploy(optimizedSchemas, deployOptions = {}) {
+    const platforms = deployOptions.platforms || ['web'];
+    const deploymentResults = {};
+
+    for (const platform of platforms) {
+      try {
+        switch (platform) {
+          case 'web':
+            deploymentResults[platform] = await this.deployToWeb(optimizedSchemas);
+            break;
+          case 'chatgpt-plugin':
+            deploymentResults[platform] = await this.deployChatGPTPlugin(optimizedSchemas);
+            break;
+          case 'voice-assistants':
+            deploymentResults[platform] = await this.deployVoiceAssistants(optimizedSchemas);
+            break;
+          default:
+            deploymentResults[platform] = { error: 'Platform not supported' };
+        }
+      } catch (error) {
+        deploymentResults[platform] = { error: error.message };
+      }
+    }
+
+    return {
+      deployments: deploymentResults,
+      timestamp: Date.now(),
+      platforms
+    };
+  }
+
+  /**
+   * Deploy to web (inject into DOM)
+   */
+  async deployToWeb(optimizedSchemas) {
+    const deployedSchemas = [];
+
+    for (const [target, schema] of Object.entries(optimizedSchemas.optimized || optimizedSchemas)) {
+      if (schema && !schema.error) {
+        try {
+          const result = initSEO({
+            schema,
+            id: `ai-optimized-${target}-${Date.now()}`,
+            validate: false // Already optimized
+          });
+          
+          if (result) {
+            deployedSchemas.push({
+              target,
+              id: result.id || `ai-optimized-${target}`,
+              success: true
+            });
+          }
+        } catch (error) {
+          deployedSchemas.push({
+            target,
+            error: error.message,
+            success: false
+          });
+        }
+      }
+    }
+
+    return {
+      deployed: deployedSchemas,
+      success: deployedSchemas.filter(d => d.success).length,
+      total: deployedSchemas.length
+    };
+  }
+
+  /**
+   * Deploy as ChatGPT plugin (future implementation)
+   */
+  async deployChatGPTPlugin(optimizedSchemas) {
+    // Placeholder for ChatGPT plugin deployment
+    return {
+      status: 'not_implemented',
+      message: 'ChatGPT plugin deployment coming in future version',
+      schemas: Object.keys(optimizedSchemas.optimized || optimizedSchemas).length
+    };
+  }
+
+  /**
+   * Deploy to voice assistants (future implementation)
+   */
+  async deployVoiceAssistants(optimizedSchemas) {
+    // Placeholder for voice assistant deployment
+    return {
+      status: 'not_implemented',
+      message: 'Voice assistant deployment coming in future version',
+      schemas: Object.keys(optimizedSchemas.optimized || optimizedSchemas).length
+    };
+  }
+
+  /**
+   * Track optimization performance
+   */
+  trackOptimization(originalSchema, optimizedSchemas, processingTime, options) {
+    if (!this.config.performanceTracking) return;
+
+    const analyticsEntry = {
+      timestamp: Date.now(),
+      originalType: originalSchema['@type'] || 'Unknown',
+      targets: Object.keys(optimizedSchemas),
+      processingTime,
+      success: Object.values(optimizedSchemas).filter(s => s && !s.error).length,
+      total: Object.keys(optimizedSchemas).length,
+      options
+    };
+
+    const key = `optimization-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    this.analytics.set(key, analyticsEntry);
+
+    // Limit analytics storage
+    if (this.analytics.size > 1000) {
+      const oldestKey = Array.from(this.analytics.keys())[0];
+      this.analytics.delete(oldestKey);
+    }
+  }
+
+  /**
+   * Get optimization analytics
+   */
+  getAnalytics() {
+    const entries = Array.from(this.analytics.values());
+    
+    if (entries.length === 0) {
+      return {
+        totalOptimizations: 0,
+        averageProcessingTime: 0,
+        successRate: 0,
+        popularTargets: {},
+        recentOptimizations: []
+      };
+    }
+
+    const totalOptimizations = entries.length;
+    const averageProcessingTime = entries.reduce((sum, e) => sum + e.processingTime, 0) / totalOptimizations;
+    const successfulOptimizations = entries.reduce((sum, e) => sum + e.success, 0);
+    const successRate = (successfulOptimizations / entries.reduce((sum, e) => sum + e.total, 0)) * 100;
+
+    // Popular targets
+    const targetCounts = {};
+    entries.forEach(entry => {
+      entry.targets.forEach(target => {
+        targetCounts[target] = (targetCounts[target] || 0) + 1;
+      });
+    });
+
+    return {
+      totalOptimizations,
+      averageProcessingTime: Math.round(averageProcessingTime * 100) / 100,
+      successRate: Math.round(successRate * 100) / 100,
+      popularTargets: targetCounts,
+      recentOptimizations: entries.slice(-10).map(e => ({
+        timestamp: e.timestamp,
+        type: e.originalType,
+        targets: e.targets,
+        processingTime: e.processingTime,
+        success: e.success
+      }))
+    };
+  }
+
+  /**
+   * Configure AI search engines
+   */
+  configure(newConfig) {
+    this.config = { ...this.config, ...newConfig };
+    return this.config;
+  }
+
+  /**
+   * Get available optimizers
+   */
+  getAvailableOptimizers() {
+    return Array.from(this.optimizers.keys());
+  }
+
+  /**
+   * Check if optimizer is available
+   */
+  isOptimizerAvailable(target) {
+    return this.optimizers.has(target);
+  }
+}
+
+/**
+ * ChatGPT Search Optimization Engine
+ * 🤖 ChatGPT Plugin Integration: Native ChatGPT search optimization
+ */
+export class ChatGPTOptimizer {
+  constructor(apiKey = null) {
+    this.apiKey = apiKey || process.env.OPENAI_API_KEY;
+    this.config = {
+      model: 'gpt-4',
+      temperature: 0.3,
+      maxTokens: 2000,
+      conversationalOptimization: true,
+      factCheckingMode: true,
+      sourceAttribution: true
+    };
+  }
+
+  /**
+   * Optimize schema for ChatGPT search
+   */
+  async optimize(schema, options = {}) {
+    const optimizationConfig = { ...this.config, ...options };
+    
+    try {
+      // Core optimization steps
+      let optimized = JSON.parse(JSON.stringify(schema)); // Deep copy
+
+      // 1. Conversational structure optimization
+      if (optimizationConfig.conversationalOptimization) {
+        optimized = this.buildConversationalSchema(optimized);
+      }
+
+      // 2. Fact-checking friendly format
+      if (optimizationConfig.factCheckingMode) {
+        optimized = this.enhanceFactualAccuracy(optimized);
+      }
+
+      // 3. Source attribution
+      if (optimizationConfig.sourceAttribution) {
+        optimized = this.addSourceAttribution(optimized);
+      }
+
+      // 4. Natural language processing optimization
+      optimized = this.optimizeForNLP(optimized);
+
+      // 5. Context preservation for follow-up questions
+      optimized = this.buildContextChain(optimized);
+
+      // 6. AI-specific enhancements
+      optimized = this.addAIEnhancements(optimized);
+
+      return {
+        ...optimized,
+        '_aiOptimization': {
+          engine: 'chatgpt',
+          version: '1.10.0',
+          timestamp: Date.now(),
+          optimizations: [
+            'conversational-structure',
+            'fact-checking-ready',
+            'source-attribution',
+            'nlp-optimized',
+            'context-chaining',
+            'ai-enhanced'
+          ]
+        }
+      };
+
+    } catch (error) {
+      debugLog(`ChatGPT optimization failed: ${error.message}`, 'error', false);
+      throw new Error(`ChatGPT optimization failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Build conversational schema structure
+   */
+  buildConversationalSchema(schema) {
+    const conversational = { ...schema };
+
+    // Add conversational properties
+    if (!conversational.potentialAction) {
+      conversational.potentialAction = [];
+    }
+
+    // Add search actions for common queries
+    const searchActions = this.generateSearchActions(schema);
+    conversational.potentialAction.push(...searchActions);
+
+    // Add FAQ structure for common questions
+    if (!conversational.mainEntity) {
+      conversational.mainEntity = this.generateFAQFromSchema(schema);
+    }
+
+    // Add alternative names for better query matching
+    if (schema.name && !conversational.alternateName) {
+      conversational.alternateName = this.generateAlternateNames(schema.name);
+    }
+
+    return conversational;
+  }
+
+  /**
+   * Enhance factual accuracy
+   */
+  enhanceFactualAccuracy(schema) {
+    const enhanced = { ...schema };
+
+    // Add verification timestamps
+    enhanced.dateModified = new Date().toISOString();
+    
+    // Add fact-checking metadata
+    if (!enhanced.about) {
+      enhanced.about = this.generateAboutInfo(schema);
+    }
+
+    // Add credibility signals
+    if (schema.author && typeof schema.author === 'string') {
+      enhanced.author = {
+        '@type': 'Person',
+        'name': schema.author,
+        'sameAs': this.generateAuthorLinks(schema.author)
+      };
+    }
+
+    return enhanced;
+  }
+
+  /**
+   * Add source attribution
+   */
+  addSourceAttribution(schema) {
+    const attributed = { ...schema };
+
+    // Add citation format
+    if (!attributed.citation) {
+      attributed.citation = this.generateCitation(schema);
+    }
+
+    // Add source URL if available
+    if (!attributed.url && typeof window !== 'undefined') {
+      attributed.url = window.location.href;
+    }
+
+    // Add publisher information
+    if (!attributed.publisher) {
+      attributed.publisher = this.generatePublisherInfo();
+    }
+
+    return attributed;
+  }
+
+  /**
+   * Optimize for Natural Language Processing
+   */
+  optimizeForNLP(schema) {
+    const nlpOptimized = { ...schema };
+
+    // Add semantic keywords
+    if (schema.description) {
+      nlpOptimized.keywords = this.extractSemanticKeywords(schema.description);
+    }
+
+    // Add related concepts
+    if (!nlpOptimized.about) {
+      nlpOptimized.about = this.generateRelatedConcepts(schema);
+    }
+
+    // Enhance text properties for better understanding
+    Object.keys(nlpOptimized).forEach(key => {
+      if (typeof nlpOptimized[key] === 'string' && nlpOptimized[key].length > 20) {
+        nlpOptimized[key] = this.enhanceTextForNLP(nlpOptimized[key]);
+      }
+    });
+
+    return nlpOptimized;
+  }
+
+  /**
+   * Build context chain for follow-up questions
+   */
+  buildContextChain(schema) {
+    const contextual = { ...schema };
+
+    // Add context breadcrumbs
+    contextual.isPartOf = this.generateContextBreadcrumbs(schema);
+
+    // Add related entities
+    if (!contextual.mentions) {
+      contextual.mentions = this.generateRelatedEntities(schema);
+    }
+
+    // Add temporal context
+    if (!contextual.temporalCoverage) {
+      contextual.temporalCoverage = this.generateTemporalContext(schema);
+    }
+
+    return contextual;
+  }
+
+  /**
+   * Add AI-specific enhancements
+   */
+  addAIEnhancements(schema) {
+    const aiEnhanced = { ...schema };
+
+    // Add AI-friendly identifiers
+    aiEnhanced.identifier = [
+      ...(Array.isArray(aiEnhanced.identifier) ? aiEnhanced.identifier : [aiEnhanced.identifier].filter(Boolean)),
+      {
+        '@type': 'PropertyValue',
+        'name': 'AI-Optimization-ID',
+        'value': `chatgpt-${Date.now()}`
+      }
+    ];
+
+    // Add machine-readable summaries
+    if (!aiEnhanced.abstract && aiEnhanced.description) {
+      aiEnhanced.abstract = this.generateAbstract(aiEnhanced.description);
+    }
+
+    return aiEnhanced;
+  }
+
+  /**
+   * Helper methods for optimization
+   */
+  generateSearchActions(schema) {
+    const actions = [];
+    
+    if (schema && schema.name) {
+      actions.push({
+        '@type': 'SearchAction',
+        'target': {
+          '@type': 'EntryPoint',
+          'urlTemplate': `search?q=${encodeURIComponent(schema.name)}`
+        },
+        'query-input': 'required name=q'
+      });
+    }
+
+    return actions;
+  }
+
+  generateFAQFromSchema(schema) {
+    const faqs = [];
+
+    if (schema && schema.name) {
+      faqs.push({
+        '@type': 'Question',
+        'name': `What is ${schema.name}?`,
+        'acceptedAnswer': {
+          '@type': 'Answer',
+          'text': schema.description || `${schema.name} is a ${schema['@type'] || 'thing'}.`
+        }
+      });
+    }
+
+    return faqs;
+  }
+
+  generateAlternateNames(name) {
+    // Simple alternate name generation
+    const alternates = [];
+    
+    // Add acronym if applicable
+    const words = name.split(' ');
+    if (words.length > 1) {
+      const acronym = words.map(w => w.charAt(0).toUpperCase()).join('');
+      if (acronym.length >= 2) alternates.push(acronym);
+    }
+
+    return alternates;
+  }
+
+  generateAboutInfo(schema) {
+    return {
+      '@type': 'Thing',
+      'name': `About ${schema.name || schema['@type']}`,
+      'description': `Information about ${schema.name || `this ${  schema['@type']}`}`
+    };
+  }
+
+  generateAuthorLinks(authorName) {
+    // Placeholder for author link generation
+    return [`https://example.com/author/${encodeURIComponent(authorName)}`];
+  }
+
+  generateCitation(schema) {
+    const siteName = typeof window !== 'undefined' ? window.location.hostname : 'example.com';
+    return `${schema.name || 'Content'}. ${siteName}. ${new Date().getFullYear()}.`;
+  }
+
+  generatePublisherInfo() {
+    return {
+      '@type': 'Organization',
+      'name': typeof window !== 'undefined' ? window.location.hostname : 'Website',
+      'url': typeof window !== 'undefined' ? window.location.origin : 'https://example.com'
+    };
+  }
+
+  extractSemanticKeywords(text) {
+    // Simple keyword extraction
+    const words = text.toLowerCase().split(/\W+/);
+    const keywords = words.filter(word => word.length > 3);
+    return [...new Set(keywords)].slice(0, 10);
+  }
+
+  generateRelatedConcepts(schema) {
+    const concepts = [];
+    
+    if (schema && schema['@type']) {
+      concepts.push({
+        '@type': 'Thing',
+        'name': schema['@type'],
+        'description': `Related to ${schema['@type']} schemas`
+      });
+    }
+
+    return concepts;
+  }
+
+  enhanceTextForNLP(text) {
+    // Simple text enhancement for NLP
+    return text.trim().replace(/\s+/g, ' ');
+  }
+
+  generateContextBreadcrumbs() {
+    return {
+      '@type': 'WebSite',
+      'name': typeof window !== 'undefined' ? window.location.hostname : 'Website',
+      'url': typeof window !== 'undefined' ? window.location.origin : 'https://example.com'
+    };
+  }
+
+  generateRelatedEntities(schema) {
+    const entities = [];
+    
+    if (schema && schema.author) {
+      entities.push({
+        '@type': 'Person',
+        'name': typeof schema.author === 'string' ? schema.author : schema.author.name
+      });
+    }
+
+    return entities;
+  }
+
+  generateTemporalContext() {
+    const now = new Date();
+    return `${now.getFullYear()}`;
+  }
+
+  generateAbstract(description) {
+    // Generate a concise abstract from description
+    const sentences = description.split(/[.!?]+/);
+    return sentences[0] + (sentences[0].endsWith('.') ? '' : '.');
+  }
+
+  /**
+   * Configure ChatGPT optimizer
+   */
+  configure(newConfig) {
+    this.config = { ...this.config, ...newConfig };
+    return this.config;
+  }
+}
+
+/**
+ * Placeholder optimizers for other AI search engines
+ * These will be implemented in future iterations
+ */
+/**
+ * Bard/Gemini Optimizer - v1.11.0
+ * Optimizes schemas for Google Bard/Gemini AI search
+ * Focuses on multi-modal content, Knowledge Graph alignment, and hybrid conversational structure
+ */
+export class BardOptimizer {
+  constructor() {
+    this.config = {
+      multiModalOptimization: true,
+      knowledgeGraphAlignment: true,
+      conversationalEnhancement: true
+    };
+  }
+
+  async optimize(schema) {
+    let optimized = JSON.parse(JSON.stringify(schema)); // Deep copy
+
+    // 1. Multi-modal metadata hints
+    optimized = this.addVisualMetadata(optimized);
+    
+    // 2. Knowledge Graph property mapping
+    optimized = this.alignWithKnowledgeGraph(optimized);
+    
+    // 3. Conversational + factual hybrid structure
+    optimized = this.buildHybridStructure(optimized);
+    
+    // 4. Rich media references
+    optimized = this.enrichWithMediaHints(optimized);
+    
+    // 5. Add Gemini-specific optimization markers
+    optimized._aiOptimization = {
+      target: 'bard-gemini',
+      version: '1.11.0',
+      optimizations: [
+        'multi-modal-hints',
+        'knowledge-graph-aligned',
+        'conversational-hybrid',
+        'media-enriched'
+      ],
+      timestamp: new Date().toISOString()
+    };
+
+    return optimized;
+  }
+
+  /**
+   * Add visual metadata for multi-modal understanding
+   */
+  addVisualMetadata(schema) {
+    // Add image-related hints for multi-modal understanding
+    if (schema.image) {
+      const images = Array.isArray(schema.image) ? schema.image : [schema.image];
+      schema.associatedMedia = images.map(img => ({
+        '@type': 'ImageObject',
+        contentUrl: typeof img === 'string' ? img : img.url || img.contentUrl,
+        description: schema.name || 'Image',
+        encodingFormat: 'image/jpeg',
+        representativeOfPage: true
+      }));
+    }
+    
+    // Suggest alt-text structure for visual content
+    if (schema['@type'] === 'Product' || schema['@type'] === 'Article') {
+      schema.about = schema.about || {
+        '@type': 'Thing',
+        name: schema.name,
+        description: schema.description
+      };
+    }
+    
+    // Add video hints if content could have video
+    if (['HowTo', 'Recipe', 'Product'].includes(schema['@type'])) {
+      if (!schema.video && schema.image) {
+        // Suggest video would enhance this content
+        schema['@graph'] = schema['@graph'] || [];
+      }
+    }
+    
+    return schema;
+  }
+
+  /**
+   * Align with Google Knowledge Graph
+   */
+  alignWithKnowledgeGraph(schema) {
+    // Add properties that align with Google Knowledge Graph
+    
+    // For organizations and businesses
+    if (schema['@type'] === 'Organization' || schema['@type'] === 'LocalBusiness') {
+      // Ensure logo (important for KG)
+      if (!schema.logo && schema.image) {
+        schema.logo = Array.isArray(schema.image) ? schema.image[0] : schema.image;
+      }
+      
+      // Add sameAs for knowledge graph entity matching
+      if (schema.url && !schema.sameAs) {
+        schema.sameAs = schema.sameAs || [];
+      }
+      
+      // Add founder info if organization
+      if (schema['@type'] === 'Organization' && !schema.founder) {
+        // KG hint - this helps entity recognition
+      }
+    }
+    
+    // Add disambiguating description (helps KG entity resolution)
+    if (schema.description && !schema.disambiguatingDescription) {
+      const firstSentence = schema.description.split(/[.!?]/)[0];
+      if (firstSentence && firstSentence.length < 100) {
+        schema.disambiguatingDescription = firstSentence.trim();
+      }
+    }
+    
+    // Add identifier for better entity matching
+    if (!schema.identifier && (schema.name || schema.url)) {
+      schema.identifier = {
+        '@type': 'PropertyValue',
+        name: 'Entity ID',
+        value: schema.url || schema.name.replace(/\s+/g, '-').toLowerCase()
+      };
+    }
+    
+    // For products, add GTIN/SKU hints
+    if (schema['@type'] === 'Product') {
+      if (!schema.gtin && !schema.sku && !schema.mpn) {
+        // Add placeholder to encourage proper identification
+        schema.sku = schema.sku || 'SKU-placeholder';
+      }
+    }
+    
+    return schema;
+  }
+
+  /**
+   * Build hybrid conversational + factual structure
+   */
+  buildHybridStructure(schema) {
+    // Combine conversational and factual elements
+    
+    // Add FAQ structure for common types
+    if (['Product', 'Service', 'LocalBusiness'].includes(schema['@type'])) {
+      const faqs = this.generateCommonFAQs(schema);
+      if (faqs.length > 0) {
+        schema.mainEntity = schema.mainEntity || faqs;
+      }
+    }
+    
+    // Add "how to" structure if applicable
+    if (schema['@type'] === 'HowTo' || (schema.name && schema.name.toLowerCase().includes('how to'))) {
+      if (!schema.step || schema.step.length === 0) {
+        // Suggest step structure
+        schema.step = schema.step || [];
+      }
+    }
+    
+    // Add mentions for entity relationships (KG connection)
+    if (schema.author || schema.brand || schema.publisher) {
+      const mentionedEntities = [];
+      
+      if (schema.author) {
+        mentionedEntities.push({
+          '@type': 'Person',
+          name: typeof schema.author === 'string' ? schema.author : schema.author.name
+        });
+      }
+      
+      if (schema.brand) {
+        mentionedEntities.push({
+          '@type': 'Brand',
+          name: typeof schema.brand === 'string' ? schema.brand : schema.brand.name
+        });
+      }
+      
+      if (mentionedEntities.length > 0) {
+        schema.mentions = mentionedEntities;
+      }
+    }
+    
+    return schema;
+  }
+
+  /**
+   * Enrich with media hints
+   */
+  enrichWithMediaHints(schema) {
+    // Add video placeholder for types that benefit from video
+    if (['Product', 'HowTo', 'Recipe'].includes(schema['@type'])) {
+      if (!schema.video && schema.image) {
+        // Gemini loves multi-modal content - hint that video would help
+        schema.potentialAction = schema.potentialAction || [];
+        schema.potentialAction.push({
+          '@type': 'WatchAction',
+          target: {
+            '@type': 'EntryPoint',
+            name: `${schema.name} Video`,
+            description: 'Video content recommended for enhanced engagement'
+          }
+        });
+      }
+    }
+    
+    // Add audio hints for content that could have audio
+    if (schema['@type'] === 'Article' || schema['@type'] === 'HowTo') {
+      if (!schema.audio) {
+        // Gemini can process audio - hint at audio content
+        schema.accessMode = schema.accessMode || ['textual', 'visual'];
+        if (schema.accessMode && !schema.accessMode.includes('auditory')) {
+          schema.accessMode.push('auditory-recommended');
+        }
+      }
+    }
+    
+    return schema;
+  }
+
+  /**
+   * Generate common FAQs for different schema types
+   */
+  generateCommonFAQs(schema) {
+    const faqs = [];
+    const type = schema['@type'];
+    const name = schema.name || 'item';
+    
+    // Product FAQs
+    if (type === 'Product') {
+      faqs.push({
+        '@type': 'Question',
+        name: `What is ${name}?`,
+        acceptedAnswer: {
+          '@type': 'Answer',
+          text: schema.description || `${name} is a product.`
+        }
+      });
+      
+      if (schema.brand) {
+        faqs.push({
+          '@type': 'Question',
+          name: `Who makes ${name}?`,
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: `${name} is made by ${typeof schema.brand === 'string' ? schema.brand : schema.brand.name}.`
+          }
+        });
+      }
+      
+      if (schema.offers && schema.offers.price) {
+        faqs.push({
+          '@type': 'Question',
+          name: `How much does ${name} cost?`,
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: `${name} costs ${schema.offers.priceCurrency || '$'}${schema.offers.price}.`
+          }
+        });
+      }
+    }
+    
+    // Local Business FAQs
+    if (type === 'LocalBusiness' || type === 'Restaurant') {
+      if (schema.address) {
+        faqs.push({
+          '@type': 'Question',
+          name: `Where is ${name} located?`,
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: `${name} is located at ${schema.address.streetAddress || ''}, ${schema.address.addressLocality || ''}.`
+          }
+        });
+      }
+      
+      if (schema.openingHours || schema.openingHoursSpecification) {
+        faqs.push({
+          '@type': 'Question',
+          name: `What are the hours for ${name}?`,
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: schema.openingHours || 'Check our website for current hours.'
+          }
+        });
+      }
+    }
+    
+    // Service FAQs
+    if (type === 'Service') {
+      faqs.push({
+        '@type': 'Question',
+        name: `What does ${name} include?`,
+        acceptedAnswer: {
+          '@type': 'Answer',
+          text: schema.description || `${name} is a service we provide.`
+        }
+      });
+    }
+    
+    return faqs.slice(0, 3); // Top 3 FAQs
+  }
+}
+
+/**
+ * Perplexity AI Optimizer - v1.11.0
+ * Optimizes schemas for Perplexity AI search
+ * Focuses on research format, citations, source attribution, and fact density
+ */
+export class PerplexityOptimizer {
+  constructor() {
+    this.config = {
+      researchFocused: true,
+      citationFormat: true,
+      factDensity: 'high'
+    };
+  }
+
+  async optimize(schema) {
+    let optimized = JSON.parse(JSON.stringify(schema)); // Deep copy
+
+    // 1. Research-friendly structure
+    optimized = this.buildResearchFormat(optimized);
+    
+    // 2. Citation structure
+    optimized = this.addCitationStructure(optimized);
+    
+    // 3. Source attribution
+    optimized = this.enhanceSourceAttribution(optimized);
+    
+    // 4. Fact density optimization
+    optimized = this.optimizeFactDensity(optimized);
+    
+    // 5. Academic markers
+    optimized = this.addAcademicMarkers(optimized);
+    
+    optimized._aiOptimization = {
+      target: 'perplexity',
+      version: '1.11.0',
+      optimizations: [
+        'research-structured',
+        'citation-ready',
+        'source-attributed',
+        'fact-dense',
+        'academic-markers'
+      ],
+      timestamp: new Date().toISOString()
+    };
+
+    return optimized;
+  }
+
+  /**
+   * Build research paper-style structure
+   */
+  buildResearchFormat(schema) {
+    // Add abstract/summary
+    if (schema.description && !schema.abstract) {
+      schema.abstract = schema.description;
+    }
+    
+    // Add keywords for research indexing
+    if ((schema.name || schema.description) && !schema.keywords) {
+      const text = `${schema.name || ''} ${schema.description || ''}`;
+      schema.keywords = this.extractResearchKeywords(text);
+    }
+    
+    // Add subject matter classification
+    if (!schema.about && schema.name) {
+      schema.about = {
+        '@type': 'Thing',
+        name: schema.name
+      };
+    }
+    
+    // For articles, add research article properties
+    if (schema['@type'] === 'Article') {
+      if (!schema.articleSection) {
+        schema.articleSection = schema.about?.name || 'General';
+      }
+    }
+    
+    return schema;
+  }
+
+  /**
+   * Add citation structure
+   */
+  addCitationStructure(schema) {
+    // For articles, add citation object
+    if (schema['@type'] === 'Article' || schema['@type'] === 'ScholarlyArticle') {
+      schema.citation = schema.citation || [];
+      
+      // Add publication metadata
+      if (schema.datePublished) {
+        schema.datePublished = new Date(schema.datePublished).toISOString();
+      }
+      
+      if (schema.dateModified) {
+        schema.dateModified = new Date(schema.dateModified).toISOString();
+      }
+      
+      // Add ISSN placeholder for journal articles
+      if (schema['@type'] === 'ScholarlyArticle' && !schema.issn) {
+        schema.issn = 'ISSN-recommended';
+      }
+    }
+    
+    // Add publisher info if missing
+    if (schema.author && !schema.publisher) {
+      schema.publisher = {
+        '@type': 'Organization',
+        name: typeof schema.author === 'string' ? schema.author : schema.author.name
+      };
+    }
+    
+    // Add bibliographic data
+    if (schema['@type'] === 'Book' && !schema.isbn) {
+      schema.isbn = 'ISBN-recommended';
+    }
+    
+    return schema;
+  }
+
+  /**
+   * Enhance source attribution
+   */
+  enhanceSourceAttribution(schema) {
+    // Add provenance
+    if (!schema.provider) {
+      schema.provider = {
+        '@type': 'Organization',
+        name: schema.publisher?.name || 'Content Provider'
+      };
+    }
+    
+    // Add author credentials for credibility
+    if (schema.author && typeof schema.author === 'object') {
+      if (!schema.author.jobTitle) {
+        schema.author.jobTitle = 'Subject Matter Expert';
+      }
+      
+      if (!schema.author.knowsAbout) {
+        schema.author.knowsAbout = schema.about?.name || schema.keywords;
+      }
+    }
+    
+    // Add fact-checking claims structure
+    if (schema['@type'] === 'Article') {
+      if (!schema.claimReviewed && schema.headline) {
+        // Perplexity values fact-checkable content
+        schema.mainEntity = schema.mainEntity || {
+          '@type': 'Claim',
+          text: schema.headline
+        };
+      }
+    }
+    
+    // Add source URL
+    if (!schema.url && typeof window !== 'undefined') {
+      schema.url = window.location.href;
+    }
+    
+    return schema;
+  }
+
+  /**
+   * Optimize fact density
+   */
+  optimizeFactDensity(schema) {
+    // Break down complex descriptions into key points
+    if (schema.description && schema.description.length > 200) {
+      const sentences = schema.description.match(/[^.!?]+[.!?]+/g) || [];
+      
+      // Add key points as structured data
+      if (sentences.length > 2 && !schema.mainEntity) {
+        schema.mainEntity = sentences.slice(0, 3).map(s => ({
+          '@type': 'Thing',
+          description: s.trim()
+        }));
+      }
+    }
+    
+    // Add data points as additional properties for products
+    if (schema['@type'] === 'Product') {
+      if (!schema.additionalProperty || schema.additionalProperty.length === 0) {
+        schema.additionalProperty = [];
+        
+        // Extract numeric facts
+        if (schema.description) {
+          const numbers = schema.description.match(/\d+(\.\d+)?/g);
+          if (numbers && numbers.length > 0) {
+            // Hint that adding structured data points would help
+          }
+        }
+      }
+    }
+    
+    // Add statistics for research content
+    if (schema['@type'] === 'Article' && schema.wordCount) {
+      schema.additionalProperty = schema.additionalProperty || [];
+      schema.additionalProperty.push({
+        '@type': 'PropertyValue',
+        name: 'word count',
+        value: schema.wordCount
+      });
+    }
+    
+    return schema;
+  }
+
+  /**
+   * Add academic/research markers
+   */
+  addAcademicMarkers(schema) {
+    // Add educational alignment if applicable
+    if (['Article', 'Course', 'Book'].includes(schema['@type'])) {
+      if (!schema.educationalLevel) {
+        schema.educationalLevel = 'Advanced';
+      }
+      
+      if (!schema.educationalUse) {
+        schema.educationalUse = 'Research';
+      }
+    }
+    
+    // Add expertise markers to author
+    if (schema.author && typeof schema.author === 'object') {
+      if (!schema.author.knowsAbout) {
+        schema.author.knowsAbout = schema.about?.name || schema.keywords;
+      }
+      
+      // Add affiliation if organization
+      if (!schema.author.affiliation && schema.publisher) {
+        schema.author.affiliation = schema.publisher;
+      }
+    }
+    
+    // Add learning resource type
+    if (schema['@type'] === 'Course' || schema['@type'] === 'LearningResource') {
+      if (!schema.learningResourceType) {
+        schema.learningResourceType = 'Research Material';
+      }
+    }
+    
+    return schema;
+  }
+
+  /**
+   * Extract research-style keywords
+   */
+  extractResearchKeywords(text) {
+    // Extract academic-style keywords
+    const words = text.toLowerCase().split(/\s+/);
+    
+    // Filter for significant words (length > 5)
+    const significantWords = words.filter(w => 
+      w.length > 5 && 
+      !['should', 'would', 'could', 'please', 'thanks'].includes(w)
+    );
+    
+    // Get unique words
+    const unique = [...new Set(significantWords)];
+    
+    return unique.slice(0, 5).join(', ');
+  }
+}
+
+export class VoiceSearchOptimizer {
+  constructor() {
+    this.config = {
+      conversationalStructure: true,
+      questionAnswerFormat: true,
+      naturalLanguage: true,
+      speakableContent: true
+    };
+  }
+
+  async optimize(schema) {
+    let optimized = JSON.parse(JSON.stringify(schema)); // Deep copy
+
+    // 1. Add speakable content markup
+    optimized = this.addSpeakableContent(optimized);
+    
+    // 2. Convert to Q&A format
+    optimized = this.addQuestionAnswerFormat(optimized);
+    
+    // 3. Natural language enhancement
+    optimized = this.enhanceForNaturalLanguage(optimized);
+    
+    // 4. Add voice-friendly metadata
+    optimized = this.addVoiceMetadata(optimized);
+    
+    // 5. Optimize for featured snippets
+    optimized = this.optimizeForFeaturedSnippets(optimized);
+    
+    optimized._aiOptimization = {
+      target: 'voice-search',
+      version: '1.11.0',
+      optimizations: [
+        'speakable-content',
+        'qa-format',
+        'natural-language',
+        'voice-metadata',
+        'featured-snippet-ready'
+      ],
+      timestamp: new Date().toISOString()
+    };
+
+    return optimized;
+  }
+
+  addSpeakableContent(schema) {
+    // Add Speakable schema for voice assistants
+    if (schema.description || schema.text || schema.headline) {
+      const speakableContent = schema.description || schema.text || schema.headline;
+      
+      schema.speakable = {
+        '@type': 'SpeakableSpecification',
+        'cssSelector': ['.speakable-content', '[itemprop="description"]'],
+        'xpath': ['/html/head/meta[@name="description"]/@content']
+      };
+      
+      // Add the actual speakable text
+      if (!schema.speakableText) {
+        schema.speakableText = this.convertToSpeakableText(speakableContent);
+      }
+    }
+    
+    return schema;
+  }
+
+  addQuestionAnswerFormat(schema) {
+    const schemaType = schema['@type'];
+    
+    // Generate natural questions based on schema type
+    const questions = this.generateVoiceQuestions(schema, schemaType);
+    
+    if (questions.length > 0 && schemaType !== 'FAQPage') {
+      // Add FAQ structure for voice queries
+      if (!schema.mainEntity) {
+        schema.mainEntity = [];
+      }
+      
+      questions.forEach(qa => {
+        schema.mainEntity.push({
+          '@type': 'Question',
+          'name': qa.question,
+          'acceptedAnswer': {
+            '@type': 'Answer',
+            'text': qa.answer
+          }
+        });
+      });
+    }
+    
+    return schema;
+  }
+
+  enhanceForNaturalLanguage(schema) {
+    // Convert formal descriptions to conversational tone
+    if (schema.description) {
+      schema.description = this.makeConversational(schema.description);
+    }
+    
+    // Add alternate names for voice recognition
+    if (schema.name && !schema.alternateName) {
+      schema.alternateName = this.generateVoiceAlternates(schema.name);
+    }
+    
+    return schema;
+  }
+
+  addVoiceMetadata(schema) {
+    // Add hints for voice assistant parsing
+    schema.audience = schema.audience || {
+      '@type': 'Audience',
+      'audienceType': 'Voice Assistant Users'
+    };
+    
+    // Add accessibility for voice
+    if (schema.name) {
+      schema.accessibilityFeature = schema.accessibilityFeature || [];
+      if (!schema.accessibilityFeature.includes('readingOrder')) {
+        schema.accessibilityFeature.push('readingOrder', 'structuralNavigation');
+      }
+    }
+    
+    return schema;
+  }
+
+  optimizeForFeaturedSnippets(schema) {
+    // Add structured data for featured snippets
+    if (schema.description) {
+      const wordCount = schema.description.split(/\s+/).length;
+      
+      // Featured snippets prefer 40-60 words
+      if (wordCount > 60) {
+        schema.abstractSummary = `${schema.description.split(/\s+/).slice(0, 55).join(' ')}...`;
+      }
+    }
+    
+    return schema;
+  }
+
+  convertToSpeakableText(text) {
+    return text
+      .replace(/&/g, 'and')
+      .replace(/\$/g, 'dollars ')
+      .replace(/(\d+)%/g, '$1 percent')
+      .replace(/\b(\d+)\b/g, (match) => {
+        // Keep numbers readable for voice
+        return match;
+      });
+  }
+
+  generateVoiceQuestions(schema, schemaType) {
+    const questions = [];
+    
+    const questionTemplates = {
+      'Product': [
+        { q: `What is ${schema.name}?`, a: schema.description },
+        { q: `How much does ${schema.name} cost?`, a: schema.offers?.price ? `It costs ${schema.offers.price} ${schema.offers.priceCurrency || 'USD'}` : 'Price available on request' }
+      ],
+      'Article': [
+        { q: `What is this article about?`, a: schema.headline || schema.name },
+        { q: `Who wrote this?`, a: schema.author?.name || 'Unknown author' }
+      ],
+      'LocalBusiness': [
+        { q: `Where is ${schema.name} located?`, a: schema.address ? this.formatAddress(schema.address) : 'Address not specified' },
+        { q: `What are the hours?`, a: schema.openingHours || 'Please contact for hours' }
+      ],
+      'Event': [
+        { q: `When is ${schema.name}?`, a: schema.startDate || 'Date to be announced' },
+        { q: `Where is the event?`, a: schema.location?.name || schema.location?.address || 'Location details available soon' }
+      ]
+    };
+    
+    const templates = questionTemplates[schemaType] || [];
+    templates.forEach(template => {
+      if (template.a && template.a !== 'undefined' && template.a.length > 0) {
+        questions.push({ question: template.q, answer: template.a });
+      }
+    });
+    
+    return questions;
+  }
+
+  makeConversational(text) {
+    // Make text more conversational for voice
+    return text
+      .replace(/\b(we|We) offer\b/g, 'You can get')
+      .replace(/\b(This|this) is\b/g, 'This is')
+      .replace(/\bcontact us\b/gi, 'get in touch');
+  }
+
+  generateVoiceAlternates(name) {
+    const alternates = [];
+    
+    // Add common spoken variations
+    if (name.includes('&')) {
+      alternates.push(name.replace(/&/g, 'and'));
+    }
+    
+    // Add acronym spelling
+    const acronym = name.match(/\b[A-Z]{2,}\b/);
+    if (acronym) {
+      alternates.push(acronym[0].split('').join(' '));
+    }
+    
+    return alternates.length > 0 ? alternates : undefined;
+  }
+
+  formatAddress(address) {
+    if (typeof address === 'string') return address;
+    
+    const parts = [];
+    if (address.streetAddress) parts.push(address.streetAddress);
+    if (address.addressLocality) parts.push(address.addressLocality);
+    if (address.addressRegion) parts.push(address.addressRegion);
+    
+    return parts.join(', ');
+  }
+}
+
+export class VisualSearchOptimizer {
+  constructor() {
+    this.config = {
+      imageOptimization: true,
+      altTextEnhancement: true,
+      visualMetadata: true,
+      structuredImageData: true
+    };
+  }
+
+  async optimize(schema) {
+    let optimized = JSON.parse(JSON.stringify(schema)); // Deep copy
+
+    // 1. Enhance image metadata
+    optimized = this.enhanceImageMetadata(optimized);
+    
+    // 2. Add alt-text optimization
+    optimized = this.optimizeAltText(optimized);
+    
+    // 3. Add visual search markup
+    optimized = this.addVisualSearchMarkup(optimized);
+    
+    // 4. Optimize for image-rich results
+    optimized = this.optimizeForImageResults(optimized);
+    
+    // 5. Add color and visual attributes
+    optimized = this.addVisualAttributes(optimized);
+    
+    optimized._aiOptimization = {
+      target: 'visual-search',
+      version: '1.11.0',
+      optimizations: [
+        'enhanced-image-metadata',
+        'optimized-alt-text',
+        'visual-search-markup',
+        'image-rich-results',
+        'visual-attributes'
+      ],
+      timestamp: new Date().toISOString()
+    };
+
+    return optimized;
+  }
+
+  enhanceImageMetadata(schema) {
+    // Convert simple image URLs to ImageObject schemas
+    if (schema.image) {
+      if (typeof schema.image === 'string') {
+        schema.image = this.createImageObject(schema.image, schema.name);
+      } else if (Array.isArray(schema.image)) {
+        schema.image = schema.image.map(img => 
+          typeof img === 'string' ? this.createImageObject(img, schema.name) : img
+        );
+      } else if (schema.image['@type'] !== 'ImageObject') {
+        schema.image['@type'] = 'ImageObject';
+        if (!schema.image.name && schema.name) {
+          schema.image.name = schema.name;
+        }
+      }
+    }
+    
+    return schema;
+  }
+
+  createImageObject(url, contextName) {
+    return {
+      '@type': 'ImageObject',
+      url,
+      'name': contextName || 'Image',
+      'contentUrl': url,
+      'caption': this.generateCaption(url, contextName),
+      'encodingFormat': this.detectImageFormat(url),
+      'representativeOfPage': true
+    };
+  }
+
+  optimizeAltText(schema) {
+    // Ensure all images have descriptive alt text
+    if (schema.image) {
+      const images = Array.isArray(schema.image) ? schema.image : [schema.image];
+      
+      images.forEach(img => {
+        if (typeof img === 'object' && img['@type'] === 'ImageObject') {
+          // Generate or enhance alt text
+          if (!img.description && !img.caption) {
+            img.description = this.generateAltText(img, schema);
+          }
+          
+          // Add thumbnail for better visual search
+          if (!img.thumbnail && img.url) {
+            img.thumbnail = {
+              '@type': 'ImageObject',
+              'url': img.url,
+              'width': 150,
+              'height': 150
+            };
+          }
+        }
+      });
+    }
+    
+    return schema;
+  }
+
+  addVisualSearchMarkup(schema) {
+    // Add schema properties for visual search engines
+    const schemaType = schema['@type'];
+    
+    // Products need visual elements
+    if (schemaType === 'Product') {
+      if (!schema.color && schema.name) {
+        const detectedColor = this.extractColorFromName(schema.name);
+        if (detectedColor) {
+          schema.color = detectedColor;
+        }
+      }
+      
+      // Add product appearance hints
+      if (!schema.material && schema.description) {
+        const material = this.extractMaterial(schema.description);
+        if (material) {
+          schema.material = material;
+        }
+      }
+    }
+    
+    // Articles/Blog posts should have featured images
+    if ((schemaType === 'Article' || schemaType === 'BlogPosting') && schema.image) {
+      schema.primaryImageOfPage = schema.image;
+    }
+    
+    return schema;
+  }
+
+  optimizeForImageResults(schema) {
+    // Add properties for Google Images and visual search
+    if (schema.image) {
+      const images = Array.isArray(schema.image) ? schema.image : [schema.image];
+      
+      // Ensure we have at least 3 high-quality images for better visibility
+      if (images.length > 0 && images.length < 3) {
+        schema._visualSearchHint = {
+          recommendation: 'Add more high-quality images (minimum 3 recommended)',
+          currentCount: images.length,
+          optimalCount: 3
+        };
+      }
+      
+      // Add image gallery if multiple images exist
+      if (images.length >= 3) {
+        schema.associatedMedia = images.map(img => ({
+          '@type': 'ImageGallery',
+          'associatedMedia': typeof img === 'string' ? this.createImageObject(img, schema.name) : img
+        }));
+      }
+    }
+    
+    return schema;
+  }
+
+  addVisualAttributes(schema) {
+    const schemaType = schema['@type'];
+    
+    // Add visual attributes based on type
+    if (schemaType === 'Product' && !schema.pattern && !schema.size) {
+      // Add placeholder visual attributes that can be filled
+      schema._visualAttributePlaceholders = {
+        pattern: 'Specify pattern (solid, striped, etc.)',
+        size: 'Add size information',
+        color: schema.color || 'Specify color'
+      };
+    }
+    
+    // Creative works should specify visual characteristics
+    if (['Painting', 'Photograph', 'VisualArtwork'].includes(schemaType)) {
+      if (!schema.artMedium) {
+        schema.artMedium = 'Digital'; // Default
+      }
+      
+      if (!schema.artform) {
+        schema.artform = schemaType;
+      }
+    }
+    
+    return schema;
+  }
+
+  generateCaption(url, contextName) {
+    const filename = url.split('/').pop().split('?')[0];
+    const nameWithoutExt = filename.replace(/\.[^.]+$/, '');
+    const readable = nameWithoutExt.replace(/[-_]/g, ' ');
+    
+    return contextName ? `${contextName} - ${readable}` : readable;
+  }
+
+  generateAltText(imageObj, schema) {
+    const parts = [];
+    
+    if (schema.name) {
+      parts.push(schema.name);
+    }
+    
+    if (imageObj.name && imageObj.name !== schema.name) {
+      parts.push(imageObj.name);
+    }
+    
+    const schemaType = schema['@type'];
+    if (schemaType === 'Product' && schema.brand?.name) {
+      parts.push(`by ${schema.brand.name}`);
+    }
+    
+    return parts.join(' - ') || 'Image';
+  }
+
+  detectImageFormat(url) {
+    const extension = url.split('.').pop().toLowerCase().split('?')[0];
+    const formatMap = {
+      'jpg': 'image/jpeg',
+      'jpeg': 'image/jpeg',
+      'png': 'image/png',
+      'gif': 'image/gif',
+      'webp': 'image/webp',
+      'svg': 'image/svg+xml'
+    };
+    
+    return formatMap[extension] || 'image/jpeg';
+  }
+
+  extractColorFromName(name) {
+    const colors = ['black', 'white', 'red', 'blue', 'green', 'yellow', 'orange', 
+                    'purple', 'pink', 'brown', 'gray', 'grey', 'silver', 'gold'];
+    
+    const nameLower = name.toLowerCase();
+    for (const color of colors) {
+      if (nameLower.includes(color)) {
+        return color.charAt(0).toUpperCase() + color.slice(1);
+      }
+    }
+    
+    return null;
+  }
+
+  extractMaterial(description) {
+    const materials = ['cotton', 'polyester', 'wool', 'silk', 'leather', 'metal', 
+                      'wood', 'plastic', 'glass', 'ceramic', 'stone', 'fabric'];
+    
+    const descLower = description.toLowerCase();
+    for (const material of materials) {
+      if (descLower.includes(material)) {
+        return material.charAt(0).toUpperCase() + material.slice(1);
+      }
+    }
+    
+    return null;
+  }
+}
+
+// Create global instances
+// Disable autonomous management during tests to prevent hanging
+const isTestEnvironment = typeof process !== 'undefined' && 
+  (process.env.NODE_ENV === 'test' || process.argv.some(arg => arg.includes('test')));
+
+export const AutonomousManager = new AutonomousSchemaManager({
+  autoDiscovery: !isTestEnvironment,
+  autoUpdates: !isTestEnvironment,
+  debug: false // Default to quiet mode
+});
+export const ContextEngine = new AIContextEngine();
+export const AISearchOptimizer = new AISearchEngines();

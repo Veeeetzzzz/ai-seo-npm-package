@@ -1,11 +1,11 @@
 {
   "name": "ai-seo",
-  "version": "1.8.0",
-  "description": "AI-native JSON-LD schema utility with multi-platform deployment, enterprise features, advanced validation, and LLM optimization. Zero runtime dependencies.",
+  "version": "1.12.1",
+  "description": "AI-native JSON-LD schema utility with automated URL-to-Schema generation, intelligent content analysis, caching, rate limiting, performance monitoring, and AI optimization (ChatGPT, Voice). Complete automation & scale features. Zero runtime dependencies.",
   "main": "index.js",
   "type": "module",
   "bin": {
-    "ai-seo": "./cli/index.js"
+    "ai-seo": "cli/index.js"
   },
   "exports": {
     ".": {
@@ -25,11 +25,14 @@
     "index.js",
     "index.d.ts",
     "cli/",
-    "tools/"
+    "tools/",
+    "src/",
+    "API-REFERENCE.md",
+    "EXAMPLES.md"
   ],
   "scripts": {
     "test": "node --test test/quick-test.js",
-    "test:run": "node --test test/quick-test.js", 
+    "test:run": "node --test test/quick-test.js",
     "test:coverage": "c8 node --test test/quick-test.js",
     "test:watch": "node --test --watch test/quick-test.js",
     "test:all": "node --test test/*.test.js",
