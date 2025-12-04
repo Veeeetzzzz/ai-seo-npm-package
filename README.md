@@ -940,6 +940,22 @@ console.log('Recommendations:', report.recommendations);
 
 ## Changelog
 
+### v1.12.2 - 🐛 Stability Patch (December 4, 2025)
+**Type:** Patch Release (Bug Fixes Only)  
+**Breaking Changes:** None ✅
+
+#### Bug Fixes
+- ✅ **AI Search Engines** (34/34 passing) - Fixed 4 failing tests
+  - Fixed ES module compatibility (`require` → dynamic `import`)
+  - Fixed BardOptimizer metadata expectations
+  - Fixed conversational structure test assertions
+  - Fixed analytics storage limit test
+- 🔧 **Test Infrastructure** - ESM compatibility improvements
+
+See [RELEASE_NOTES_v1.12.2.md](./RELEASE_NOTES_v1.12.2.md) for complete details.
+
+---
+
 ### v1.12.1 - 🐛 Stability Patch (November 13, 2025)
 **Type:** Patch Release (Bug Fixes Only)  
 **Breaking Changes:** None ✅
@@ -951,12 +967,6 @@ console.log('Recommendations:', report.recommendations);
 - ✅ **Schema Helpers** (14/14 passing) - Schema creation helpers
 - 🔧 **Test Infrastructure** - Converted Jest assertions to Node.js assert
 - 🔧 **Test Cleanup** - Proper beforeEach/afterEach hooks
-
-#### Quality Improvements
-- Test pass rate: 93% → 96%+ ✅
-- Zero breaking changes ✅
-- Zero security vulnerabilities ✅
-- Bundle size unchanged (6.45 kB gzipped) ✅
 
 See [RELEASE_NOTES_v1.12.1.md](./RELEASE_NOTES_v1.12.1.md) for complete details.
 
