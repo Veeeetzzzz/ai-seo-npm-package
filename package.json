@@ -1,6 +1,6 @@
 {
   "name": "ai-seo",
-  "version": "1.12.2",
+  "version": "1.12.3",
   "description": "AI-native JSON-LD schema utility with automated URL-to-Schema generation, intelligent content analysis, caching, rate limiting, performance monitoring, and AI optimization (ChatGPT, Voice). Complete automation & scale features. Zero runtime dependencies.",
   "main": "index.js",
   "type": "module",

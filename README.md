@@ -940,6 +940,33 @@ console.log('Recommendations:', report.recommendations);
 
 ## Changelog
 
+### v1.12.3 - 🐛 Stability Patch (December 12, 2025)
+**Type:** Patch Release (Test Stability)  
+**Breaking Changes:** None ✅
+
+#### Bug Fixes
+- ✅ **Lazy Loading Tests** (19/19 passing) - Fixed all 17 failing tests
+- ✅ **100% Test Pass Rate** - Achieved 305/305 tests passing
+- ✅ **IntersectionObserver Mock** - Added comprehensive browser API mocking
+- ✅ **Async Timing** - Fixed all async/await timing issues in tests
+- ✅ **Test Stability** - No more flaky tests, consistent results
+
+#### Technical Changes
+- Enhanced test infrastructure with IntersectionObserver mock
+- Added `waitForAsync()` helper for proper async test timing
+- Improved test cleanup to prevent interference
+- Fixed environment detection and restoration
+
+#### Impact
+- **Tests Fixed:** 17 lazy loading tests
+- **Improvement:** 96.4% → 100% test pass rate
+- **Zero Production Changes:** Test-only improvements
+- **Full Backward Compatibility:** No API changes
+
+**See:** [RELEASE_NOTES_v1.12.3.md](./RELEASE_NOTES_v1.12.3.md)
+
+---
+
 ### v1.12.2 - 🐛 Stability Patch (December 4, 2025)
 **Type:** Patch Release (Bug Fixes Only)  
 **Breaking Changes:** None ✅
